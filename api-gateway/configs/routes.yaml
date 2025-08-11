@@ -2,11 +2,14 @@ routes:
   - prefix: "/api/auth"
     target: "auth-service:8010"
     methods: ["GET", "POST", "PUT", "DELETE"]
+    auth_required: false  # Login and register endpoints should not require auth
   
   - prefix: "/api/airtable"
     target: "airtable-gateway:8002" 
     methods: ["GET", "POST", "PUT", "DELETE"]
+    auth_required: true
   
   - prefix: "/api/ai"
     target: "ai-processing-service:8001"
     methods: ["GET", "POST", "PUT", "DELETE"]
+    auth_required: true

@@ -173,10 +173,13 @@ type FeaturesConfig struct {
 }
 
 type RouteConfig struct {
-	Prefix  string   `mapstructure:"prefix"`
-	Target  string   `mapstructure:"target"`
-	Methods []string `mapstructure:"methods"`
+	Prefix       string   `mapstructure:"prefix"`
+	Target       string   `mapstructure:"target"`
+	Methods      []string `mapstructure:"methods"`
+	AuthRequired bool     `mapstructure:"auth_required"`
 }
+
+// NOTE: Auth middleware implementation will be added in PYAIR-007
 
 func Load() (*Config, error) {
 	viper.SetConfigName("config")
