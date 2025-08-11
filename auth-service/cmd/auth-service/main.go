@@ -132,6 +132,11 @@ func main() {
     auth.Post("/logout", authHandler.Logout)
     auth.Post("/validate", authHandler.ValidateToken)
     
+    // API auth routes (skeleton endpoints)
+    api := app.Group("/api")
+    apiAuth := api.Group("/auth")
+    apiAuth.Post("/login", authHandler.LoginSkeleton)
+    
     // Protected routes (require auth)
     protected := auth.Group("", authMiddleware.RequireAuth)
     protected.Get("/me", authHandler.GetMe)

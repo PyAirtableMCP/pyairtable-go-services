@@ -139,6 +139,36 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
     return c.JSON(tokens)
 }
 
+// LoginSkeleton handles login with mock response (skeleton implementation)
+func (h *AuthHandler) LoginSkeleton(c *fiber.Ctx) error {
+    var req struct {
+        Email    string `json:"email"`
+        Password string `json:"password"`
+    }
+    
+    if err := c.BodyParser(&req); err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+            "error": "Invalid request body",
+        })
+    }
+    
+    // Basic validation
+    if req.Email == "" || req.Password == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+            "error": "Email and password are required",
+        })
+    }
+    
+    // Return mock data as specified
+    return c.JSON(fiber.Map{
+        "token": "placeholder",
+        "user": fiber.Map{
+            "id":    "1",
+            "email": req.Email,
+        },
+    })
+}
+
 // RefreshToken handles token refresh
 func (h *AuthHandler) RefreshToken(c *fiber.Ctx) error {
     var req models.RefreshRequest
