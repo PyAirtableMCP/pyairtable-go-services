@@ -19,6 +19,7 @@ type Config struct {
 	Observability ObservabilityConfig `mapstructure:"observability"`
 	Performance PerformanceConfig `mapstructure:"performance"`
 	Features FeaturesConfig `mapstructure:"features"`
+	Routes   []RouteConfig  `mapstructure:"routes"`
 }
 
 type ServerConfig struct {
@@ -171,6 +172,12 @@ type FeaturesConfig struct {
 	HealthCheckPaths    []string `mapstructure:"health_check_paths"`
 }
 
+type RouteConfig struct {
+	Prefix  string   `mapstructure:"prefix"`
+	Target  string   `mapstructure:"target"`
+	Methods []string `mapstructure:"methods"`
+}
+
 func Load() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -199,6 +206,11 @@ func Load() (*Config, error) {
 
 	// Override with environment variables
 	overrideWithEnv(&config)
+
+	// Load routes configuration
+	if err := loadRoutes(&config); err != nil {
+		return nil, fmt.Errorf("error loading routes: %w", err)
+	}
 
 	return &config, nil
 }
@@ -327,4 +339,31 @@ func overrideWithEnv(config *Config) {
 	if corsOrigins := os.Getenv("CORS_ORIGINS"); corsOrigins != "" {
 		config.Security.CORS.AllowOrigins = strings.Split(corsOrigins, ",")
 	}
+}
+
+func loadRoutes(config *Config) error {
+	routesViper := viper.New()
+	routesViper.SetConfigName("routes")
+	routesViper.SetConfigType("yaml")
+	routesViper.AddConfigPath("./configs")
+	routesViper.AddConfigPath(".")
+	
+	if err := routesViper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// Routes file is optional, return empty routes if not found
+			return nil
+		}
+		return fmt.Errorf("error reading routes config: %w", err)
+	}
+	
+	var routesConfig struct {
+		Routes []RouteConfig `mapstructure:"routes"`
+	}
+	
+	if err := routesViper.Unmarshal(&routesConfig); err != nil {
+		return fmt.Errorf("error unmarshaling routes config: %w", err)
+	}
+	
+	config.Routes = routesConfig.Routes
+	return nil
 }
