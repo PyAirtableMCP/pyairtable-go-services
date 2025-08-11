@@ -1,0 +1,516 @@
+# Example GraphQL mutations for PyAirtable Federation
+
+# User registration
+mutation RegisterUser($input: RegisterInput!) {
+  register(input: $input) {
+    success
+    token
+    refreshToken
+    user {
+      id
+      email
+      firstName
+      lastName
+      role
+      status
+    }
+    expiresAt
+    message
+  }
+}
+
+# User login
+mutation LoginUser($input: LoginInput!) {
+  login(input: $input) {
+    success
+    token
+    refreshToken
+    user {
+      id
+      email
+      firstName
+      lastName
+      role
+      status
+      lastLoginAt
+    }
+    expiresAt
+    message
+  }
+}
+
+# Update user profile
+mutation UpdateUserProfile($input: UpdateUserInput!) {
+  updateUser(input: $input) {
+    id
+    firstName
+    lastName
+    username
+    avatar
+    phoneNumber
+    timezone
+    locale
+    preferences {
+      theme
+      language
+      notifications {
+        email
+        push
+        digest
+      }
+    }
+    updatedAt
+  }
+}
+
+# Create workspace
+mutation CreateWorkspace($input: CreateWorkspaceInput!) {
+  createWorkspace(input: $input) {
+    id
+    name
+    slug
+    description
+    plan
+    status
+    owner {
+      id
+      firstName
+      lastName
+    }
+    settings {
+      visibility
+      joinPolicy
+      defaultMemberRole
+    }
+    createdAt
+  }
+}
+
+# Invite member to workspace
+mutation InviteMember($input: InviteMemberInput!) {
+  inviteMember(input: $input) {
+    id
+    email
+    role
+    status
+    token
+    inviter {
+      id
+      firstName
+      lastName
+    }
+    message
+    expiresAt
+    createdAt
+  }
+}
+
+# Accept workspace invitation
+mutation AcceptInvitation($token: String!) {
+  acceptInvitation(token: $token) {
+    id
+    role
+    status
+    user {
+      id
+      firstName
+      lastName
+      email
+    }
+    workspace {
+      id
+      name
+      slug
+    }
+    joinedAt
+  }
+}
+
+# Create project
+mutation CreateProject($input: CreateProjectInput!) {
+  createProject(input: $input) {
+    id
+    name
+    description
+    status
+    priority
+    owner {
+      id
+      firstName
+      lastName
+    }
+    workspace {
+      id
+      name
+    }
+    tags
+    deadline
+    createdAt
+  }
+}
+
+# Update project
+mutation UpdateProject($id: ID!, $input: UpdateProjectInput!) {
+  updateProject(id: $id, input: $input) {
+    id
+    name
+    description
+    status
+    priority
+    progress
+    tags
+    deadline
+    updatedAt
+  }
+}
+
+# Connect Airtable base
+mutation ConnectAirtableBase($input: ConnectBaseInput!) {
+  connectAirtableBase(input: $input) {
+    id
+    name
+    airtableId
+    connectionStatus
+    workspace {
+      id
+      name
+    }
+    syncFrequency
+    autoSync
+    syncSettings {
+      enabled
+      syncDirection
+      conflictResolution
+    }
+    createdAt
+  }
+}
+
+# Sync Airtable base
+mutation SyncAirtableBase($id: ID!) {
+  syncAirtableBase(id: $id) {
+    success
+    recordsProcessed
+    recordsCreated
+    recordsUpdated
+    recordsDeleted
+    errors {
+      recordId
+      error
+      severity
+    }
+    duration
+    timestamp
+  }
+}
+
+# Create Airtable record
+mutation CreateAirtableRecord($input: CreateRecordInput!) {
+  createAirtableRecord(input: $input) {
+    id
+    airtableId
+    fields
+    fieldValues {
+      fieldId
+      fieldName
+      fieldType
+      value
+      displayValue
+    }
+    createdTime
+  }
+}
+
+# Update Airtable record
+mutation UpdateAirtableRecord($input: UpdateRecordInput!) {
+  updateAirtableRecord(input: $input) {
+    id
+    airtableId
+    fields
+    fieldValues {
+      fieldId
+      fieldName
+      fieldType
+      value
+      displayValue
+    }
+    lastModifiedTime
+  }
+}
+
+# Bulk create Airtable records
+mutation BulkCreateRecords($tableId: ID!, $records: [JSON!]!) {
+  bulkCreateRecords(tableId: $tableId, records: $records) {
+    success
+    processed
+    succeeded
+    failed
+    errors {
+      index
+      recordId
+      error
+    }
+  }
+}
+
+# Upload file
+mutation UploadFile($input: UploadFileInput!) {
+  uploadFile(input: $input) {
+    file {
+      id
+      filename
+      originalName
+      mimeType
+      size
+      humanSize
+      storageProvider
+      visibility
+      status
+      uploader {
+        id
+        firstName
+        lastName
+      }
+      folder {
+        id
+        name
+        path
+      }
+      tags
+      createdAt
+    }
+    processingJobs {
+      id
+      type
+      status
+      progress
+    }
+  }
+}
+
+# Create folder
+mutation CreateFolder($input: CreateFolderInput!) {
+  createFolder(input: $input) {
+    id
+    name
+    description
+    path
+    parent {
+      id
+      name
+    }
+    workspace {
+      id
+      name
+    }
+    creator {
+      id
+      firstName
+      lastName
+    }
+    createdAt
+  }
+}
+
+# Share file
+mutation ShareFile($input: ShareFileInput!) {
+  shareFile(input: $input) {
+    id
+    shareType
+    shareUrl
+    permissions {
+      canView
+      canDownload
+      canComment
+    }
+    recipientEmail
+    recipientName
+    expiresAt
+    maxDownloads
+    hasPassword
+    createdAt
+  }
+}
+
+# Move file to folder
+mutation MoveFile($fileId: ID!, $folderId: ID!) {
+  moveFile(fileId: $fileId, folderId: $folderId) {
+    id
+    filename
+    folder {
+      id
+      name
+      path
+    }
+    updatedAt
+  }
+}
+
+# Create integration
+mutation CreateIntegration($input: CreateIntegrationInput!) {
+  createIntegration(input: $input) {
+    id
+    type
+    name
+    description
+    status
+    workspace {
+      id
+      name
+    }
+    createdBy
+    createdAt
+  }
+}
+
+# Update workspace settings
+mutation UpdateWorkspace($id: ID!, $input: UpdateWorkspaceInput!) {
+  updateWorkspace(id: $id, input: $input) {
+    id
+    name
+    description
+    avatar
+    settings {
+      visibility
+      joinPolicy
+      defaultMemberRole
+      allowGuestAccess
+      requireTwoFactor
+      branding {
+        primaryColor
+        secondaryColor
+        logo
+      }
+      notifications {
+        enableEmailNotifications
+        enableSlackIntegration
+        digestFrequency
+      }
+      security {
+        passwordPolicy {
+          minLength
+          requireNumbers
+          requireSymbols
+        }
+        sessionTimeout
+        encryptionEnabled
+      }
+    }
+    updatedAt
+  }
+}
+
+# Mark notification as read
+mutation MarkNotificationAsRead($notificationId: ID!) {
+  markNotificationAsRead(notificationId: $notificationId)
+}
+
+# Mark all notifications as read
+mutation MarkAllNotificationsAsRead {
+  markAllNotificationsAsRead
+}
+
+# Update member role
+mutation UpdateMemberRole($input: UpdateMemberRoleInput!) {
+  updateMemberRole(input: $input) {
+    id
+    role
+    user {
+      id
+      firstName
+      lastName
+      email
+    }
+    permissions {
+      id
+      name
+    }
+    updatedAt
+  }
+}
+
+# Remove member from workspace
+mutation RemoveMember($workspaceId: ID!, $memberId: ID!) {
+  removeMember(workspaceId: $workspaceId, memberId: $memberId)
+}
+
+# Delete file
+mutation DeleteFile($id: ID!) {
+  deleteFile(id: $id)
+}
+
+# Archive workspace
+mutation ArchiveWorkspace($id: ID!) {
+  archiveWorkspace(id: $id) {
+    id
+    status
+    updatedAt
+  }
+}
+
+# Process file (e.g., generate thumbnails, OCR)
+mutation ProcessFile($input: ProcessFileInput!) {
+  processFile(input: $input) {
+    id
+    type
+    status
+    progress
+    config
+    startedAt
+  }
+}
+
+# Generate thumbnails for file
+mutation GenerateThumbnails($fileId: ID!, $sizes: [ThumbnailSize!]!) {
+  generateThumbnails(fileId: $fileId, sizes: $sizes) {
+    id
+    size
+    width
+    height
+    url
+    format
+    createdAt
+  }
+}
+
+# Perform OCR on file
+mutation PerformOCR($fileId: ID!, $language: String) {
+  performOCR(fileId: $fileId, language: $language)
+}
+
+# Bulk file operations
+mutation BulkFileOperation($input: BulkFileOperation!) {
+  bulkFileOperation(input: $input) {
+    success
+    processed
+    succeeded
+    failed
+    errors {
+      fileId
+      error
+    }
+  }
+}
+
+# Change password
+mutation ChangePassword($input: ChangePasswordInput!) {
+  changePassword(input: $input)
+}
+
+# Upgrade workspace plan
+mutation UpgradeWorkspacePlan($workspaceId: ID!, $plan: WorkspacePlan!) {
+  upgradeWorkspacePlan(workspaceId: $workspaceId, plan: $plan) {
+    id
+    plan
+    status
+    monthlyPrice
+    yearlyPrice
+    nextBillingDate
+    trialEndsAt
+  }
+}
+
+# Test integration
+mutation TestIntegration($id: ID!) {
+  testIntegration(id: $id)
+}

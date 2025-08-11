@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: webbff
+  namespace: webbff
+  labels:
+    app: webbff
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8089"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8089
+    protocol: TCP
+    name: http
+  selector:
+    app: webbff
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webbff-headless
+  namespace: webbff
+  labels:
+    app: webbff
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - port: 8089
+    targetPort: 8089
+    protocol: TCP
+    name: http
+  selector:
+    app: webbff

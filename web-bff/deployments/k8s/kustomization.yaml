@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: webbff
+
+namespace: webbff
+
+resources:
+- namespace.yaml
+- configmap.yaml
+- deployment.yaml
+- service.yaml
+- ingress.yaml
+- hpa.yaml
+
+images:
+- name: webbff
+  newTag: latest
+
+commonLabels:
+  app: webbff
+  environment: production
+
+patches:
+- target:
+    kind: Deployment
+    name: webbff
+  patch: |
+    - op: replace
+      path: /spec/replicas
+      value: 3

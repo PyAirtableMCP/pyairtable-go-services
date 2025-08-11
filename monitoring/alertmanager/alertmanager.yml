@@ -1,0 +1,190 @@
+# Alertmanager Configuration for PyAirtable
+# Handles alert routing, grouping, and notification delivery
+
+global:
+  # Default SMTP configuration for email alerts
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@pyairtable.com'
+  smtp_auth_username: 'alerts@pyairtable.com'
+  smtp_auth_password: 'your-email-password'
+  smtp_require_tls: true
+
+# Templates for custom alert formats
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alert routing
+route:
+  # Default grouping and timing
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s          # Time to wait before sending initial notification
+  group_interval: 10s      # Time to wait before sending updates to group
+  repeat_interval: 1h      # Time to wait before resending alert
+  receiver: 'default'      # Default receiver for unmatched alerts
+
+  # Routing rules for different alert types
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      group_wait: 5s
+      group_interval: 5s
+      repeat_interval: 5m
+      receiver: 'critical-alerts'
+      continue: true
+
+    # Service-specific routing
+    - match:
+        category: availability
+      receiver: 'service-alerts'
+      continue: true
+
+    # Infrastructure alerts
+    - match:
+        category: infrastructure
+      receiver: 'infrastructure-alerts'
+      continue: true
+
+    # Database alerts
+    - match:
+        category: database
+      receiver: 'database-alerts'
+      continue: true
+
+    # Security alerts
+    - match:
+        category: security
+      receiver: 'security-alerts'
+      continue: true
+
+    # Development environment - less noisy
+    - match:
+        environment: development
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: 'dev-alerts'
+
+# Inhibition rules to suppress redundant alerts
+inhibit_rules:
+  # Suppress non-critical alerts when critical alerts are firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service', 'instance']
+
+  # Suppress specific alerts when service is down
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match_re:
+      alertname: '(HighResponseTime|HighErrorRate|DatabaseConnectionPoolExhausted)'
+    equal: ['service', 'instance']
+
+# Notification receivers
+receivers:
+  # Default receiver - logs alerts
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://localhost:9093/api/v1/alerts'
+        send_resolved: true
+
+  # Critical alerts - multiple channels
+  - name: 'critical-alerts'
+    # Email notifications
+    email_configs:
+      - to: 'alerts@pyairtable.com'
+        subject: '[CRITICAL] PyAirtable Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Severity: {{ .Labels.severity }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+        headers:
+          Priority: 'high'
+    
+    # Slack notifications (configure webhook URL)
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#alerts-critical'
+        title: 'Critical Alert - {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Service:* {{ .Labels.service }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+
+  # Service availability alerts
+  - name: 'service-alerts'
+    email_configs:
+      - to: 'devops@pyairtable.com'
+        subject: '[SERVICE] PyAirtable Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          Service Alert Details:
+          {{ range .Alerts }}
+          - Alert: {{ .Annotations.summary }}
+          - Service: {{ .Labels.service }}
+          - Instance: {{ .Labels.instance }}
+          - Description: {{ .Annotations.description }}
+          - Time: {{ .StartsAt }}
+          {{ end }}
+
+  # Infrastructure alerts
+  - name: 'infrastructure-alerts'
+    email_configs:
+      - to: 'infrastructure@pyairtable.com'
+        subject: '[INFRA] PyAirtable Infrastructure Alert'
+        body: |
+          Infrastructure Alert:
+          {{ range .Alerts }}
+          - {{ .Annotations.summary }}
+          - {{ .Annotations.description }}
+          {{ end }}
+
+  # Database alerts
+  - name: 'database-alerts'
+    email_configs:
+      - to: 'dba@pyairtable.com'
+        subject: '[DATABASE] PyAirtable Database Alert'
+        body: |
+          Database Alert:
+          {{ range .Alerts }}
+          - {{ .Annotations.summary }}
+          - {{ .Annotations.description }}
+          {{ end }}
+
+  # Security alerts
+  - name: 'security-alerts'
+    email_configs:
+      - to: 'security@pyairtable.com'
+        subject: '[SECURITY] PyAirtable Security Alert'
+        body: |
+          Security Alert:
+          {{ range .Alerts }}
+          - {{ .Annotations.summary }}
+          - {{ .Annotations.description }}
+          {{ end }}
+        headers:
+          Priority: 'high'
+
+  # Development environment alerts - less urgent
+  - name: 'dev-alerts'
+    webhook_configs:
+      - url: 'http://localhost:9093/api/v1/alerts'
+        send_resolved: true
+    # Optional: Send to development Slack channel
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/DEV/WEBHOOK'
+        channel: '#alerts-dev'
+        title: 'Dev Environment Alert'
+        text: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Service: {{ .Labels.service }}
+          {{ end }}
+        send_resolved: true

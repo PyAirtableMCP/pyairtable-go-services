@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: fileservice
+  namespace: fileservice
+  labels:
+    app: fileservice
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8088"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8088
+    protocol: TCP
+    name: http
+  selector:
+    app: fileservice
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fileservice-headless
+  namespace: fileservice
+  labels:
+    app: fileservice
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - port: 8088
+    targetPort: 8088
+    protocol: TCP
+    name: http
+  selector:
+    app: fileservice

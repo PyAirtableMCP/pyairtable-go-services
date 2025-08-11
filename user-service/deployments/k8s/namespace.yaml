@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: userservice
+  labels:
+    name: userservice
+    app: userservice
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: userservice-limit-range
+  namespace: userservice
+spec:
+  limits:
+  - default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    type: Container

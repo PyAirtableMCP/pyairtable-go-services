@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mobilebff
+  namespace: mobilebff
+  labels:
+    app: mobilebff
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8090"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8090
+    protocol: TCP
+    name: http
+  selector:
+    app: mobilebff
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mobilebff-headless
+  namespace: mobilebff
+  labels:
+    app: mobilebff
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - port: 8090
+    targetPort: 8090
+    protocol: TCP
+    name: http
+  selector:
+    app: mobilebff

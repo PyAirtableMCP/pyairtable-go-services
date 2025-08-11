@@ -1,0 +1,325 @@
+# Prometheus Configuration for PyAirtable Microservices
+# Comprehensive metrics collection from all Go services and infrastructure components
+
+global:
+  scrape_interval: 15s              # Default scrape interval
+  evaluation_interval: 15s          # Rule evaluation interval
+  scrape_timeout: 10s              # Default scrape timeout
+  external_labels:
+    cluster: 'pyairtable-local'
+    environment: 'development'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Rules files
+rule_files:
+  - "rules/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # ===== GO MICROSERVICES =====
+  
+  # API Gateway - Main entry point (port 8080)
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'api-gateway'
+      - target_label: service
+        replacement: 'api-gateway'
+      - target_label: component
+        replacement: 'gateway'
+
+  # Auth Service - Authentication and JWT management (port 8001)
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:8001']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'auth-service'
+      - target_label: service
+        replacement: 'auth-service'
+      - target_label: component
+        replacement: 'authentication'
+
+  # User Service - User management and profiles (port 8002)
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-service:8002']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'user-service'
+      - target_label: service
+        replacement: 'user-service'
+      - target_label: component
+        replacement: 'user-management'
+
+  # Permission Service - RBAC and authorization (port 8085)
+  - job_name: 'permission-service'
+    static_configs:
+      - targets: ['permission-service:8085']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'permission-service'
+      - target_label: service
+        replacement: 'permission-service'
+      - target_label: component
+        replacement: 'authorization'
+
+  # Platform Services - Consolidated platform functionality (port 8081)
+  - job_name: 'platform-services'
+    static_configs:
+      - targets: ['platform-services-go:8081']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'platform-services'
+      - target_label: service
+        replacement: 'platform-services'
+      - target_label: component
+        replacement: 'platform'
+
+  # Platform Service - Legacy consolidated service (port 8007)
+  - job_name: 'platform-service'
+    static_configs:
+      - targets: ['platform-service:8007']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'platform-service'
+      - target_label: service
+        replacement: 'platform-service'
+      - target_label: component
+        replacement: 'platform-legacy'
+
+  # Automation Services - File processing and workflows (port 8082)
+  - job_name: 'automation-services'
+    static_configs:
+      - targets: ['automation-services-go:8082']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'automation-services'
+      - target_label: service
+        replacement: 'automation-services'
+      - target_label: component
+        replacement: 'automation'
+
+  # ===== PYTHON SERVICES =====
+  
+  # Airtable Gateway - Python service for Airtable integration
+  - job_name: 'airtable-gateway'
+    static_configs:
+      - targets: ['airtable-gateway:8002']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'airtable-gateway'
+      - target_label: service
+        replacement: 'airtable-gateway'
+      - target_label: component
+        replacement: 'integration'
+      - target_label: language
+        replacement: 'python'
+
+  # LLM Orchestrator - AI/ML service
+  - job_name: 'llm-orchestrator'
+    static_configs:
+      - targets: ['llm-orchestrator:8003']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 8s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'llm-orchestrator'
+      - target_label: service
+        replacement: 'llm-orchestrator'
+      - target_label: component
+        replacement: 'ai-ml'
+      - target_label: language
+        replacement: 'python'
+
+  # MCP Server - Model Context Protocol server
+  - job_name: 'mcp-server'
+    static_configs:
+      - targets: ['mcp-server:8001']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 8s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'mcp-server'
+      - target_label: service
+        replacement: 'mcp-server'
+      - target_label: component
+        replacement: 'protocol'
+      - target_label: language
+        replacement: 'python'
+
+  # ===== INFRASTRUCTURE EXPORTERS =====
+
+  # Node Exporter - System metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'docker-host'
+      - target_label: component
+        replacement: 'system'
+
+  # PostgreSQL Exporter - Database metrics
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'postgres-main'
+      - target_label: component
+        replacement: 'database'
+
+  # Redis Exporter - Cache metrics
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'redis-main'
+      - target_label: component
+        replacement: 'cache'
+
+  # cAdvisor - Container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'docker-containers'
+      - target_label: component
+        replacement: 'containers'
+
+  # ===== SERVICE HEALTH MONITORING =====
+
+  # Blackbox Exporter - Service endpoint health checks
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]  # Look for a HTTP 200 response
+    static_configs:
+      - targets:
+        - http://api-gateway:8080/health
+        - http://auth-service:8001/health
+        - http://user-service:8002/health
+        - http://permission-service:8085/health
+        - http://platform-services-go:8081/health
+        - http://platform-service:8007/health
+        - http://automation-services-go:8082/health
+    relabel_configs:
+      # Save the target URL as a label
+      - source_labels: [__address__]
+        target_label: __param_target
+      # Set the actual target to the blackbox exporter
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      # Extract service name from URL for labeling
+      - source_labels: [__param_target]
+        regex: 'http://([^:]+):.*'
+        target_label: service
+        replacement: '${1}'
+      - target_label: component
+        replacement: 'health-check'
+
+  # ===== CUSTOM METRICS COLLECTION =====
+  
+  # Additional service discovery for dynamic services
+  # This section can be extended for Kubernetes service discovery
+  # when migrating to K8s environment
+  
+  # Future: Add Consul, Kubernetes, or other service discovery mechanisms
+  # - job_name: 'kubernetes-pods'
+  #   kubernetes_sd_configs:
+  #   - role: pod
+  #   relabel_configs:
+  #   - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+  #     action: keep
+  #     regex: true
+
+# Configuration for metric relabeling
+# This helps normalize metric names and add consistent labels
+metric_relabel_configs:
+  # Add environment label to all metrics
+  - target_label: environment
+    replacement: 'development'
+  
+  # Add cluster label to all metrics
+  - target_label: cluster
+    replacement: 'pyairtable-local'

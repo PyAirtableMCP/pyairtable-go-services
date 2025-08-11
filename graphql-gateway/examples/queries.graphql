@@ -1,0 +1,458 @@
+# Example GraphQL queries for PyAirtable Federation
+
+# Get current user with permissions and workspaces
+query GetCurrentUser {
+  me {
+    id
+    email
+    firstName
+    lastName
+    displayName
+    role
+    status
+    permissions {
+      id
+      name
+      category
+    }
+    workspaces {
+      id
+      role
+      status
+      workspace {
+        id
+        name
+        slug
+        plan
+        memberCount
+      }
+    }
+    createdAt
+  }
+}
+
+# Get workspace with detailed information
+query GetWorkspaceDetails($workspaceId: ID!) {
+  workspace(id: $workspaceId) {
+    id
+    name
+    slug
+    description
+    plan
+    status
+    owner {
+      id
+      firstName
+      lastName
+      email
+    }
+    members {
+      id
+      role
+      status
+      user {
+        id
+        firstName
+        lastName
+        email
+        avatar
+      }
+      joinedAt
+    }
+    projects {
+      id
+      name
+      description
+      status
+      priority
+      progress
+      owner {
+        id
+        firstName
+        lastName
+      }
+      members {
+        id
+        role
+        user {
+          id
+          firstName
+          lastName
+        }
+      }
+    }
+    airtableBases {
+      id
+      name
+      connectionStatus
+      tableCount
+      recordCount
+      lastSyncAt
+    }
+    usage {
+      storage {
+        totalUsed
+        totalLimit
+        percentage
+      }
+      members {
+        totalMembers
+        membersLimit
+        activeMembers
+      }
+    }
+    createdAt
+    updatedAt
+  }
+}
+
+# Search users with filters
+query SearchUsers($query: String, $filters: UserSearchFilters, $pagination: PaginationInput) {
+  searchUsers(query: $query, filters: $filters, pagination: $pagination) {
+    users {
+      id
+      email
+      firstName
+      lastName
+      displayName
+      role
+      status
+      avatar
+      lastActiveAt
+    }
+    totalCount
+    hasNextPage
+    hasPreviousPage
+  }
+}
+
+# Get Airtable base with schema
+query GetAirtableBaseSchema($baseId: ID!) {
+  airtableBase(id: $baseId) {
+    id
+    name
+    description
+    connectionStatus
+    workspace {
+      id
+      name
+    }
+    tables {
+      id
+      name
+      description
+      recordCount
+      fields {
+        id
+        name
+        type
+        description
+        required
+        options {
+          choices {
+            id
+            name
+            color
+          }
+        }
+      }
+      views {
+        id
+        name
+        type
+        description
+        isPublic
+      }
+    }
+    usage {
+      recordCount
+      apiCallsThisMonth
+      storageUsed
+    }
+    lastSyncAt
+    createdAt
+  }
+}
+
+# Get Airtable records with filtering
+query GetAirtableRecords(
+  $tableId: ID!
+  $filters: [RecordFilter!]
+  $sort: [RecordSort!]
+  $pagination: PaginationInput
+) {
+  airtableRecords(
+    tableId: $tableId
+    filters: $filters
+    sort: $sort
+    pagination: $pagination
+  ) {
+    records {
+      id
+      airtableId
+      fields
+      fieldValues {
+        fieldId
+        fieldName
+        fieldType
+        value
+        displayValue
+      }
+      linkedRecords {
+        recordId
+        displayValue
+        tableName
+      }
+      attachments {
+        id
+        filename
+        url
+        type
+        size
+      }
+      createdTime
+      lastModifiedTime
+    }
+    totalCount
+    hasNextPage
+  }
+}
+
+# Get workspace files
+query GetWorkspaceFiles($workspaceId: ID!, $folderId: ID, $pagination: PaginationInput) {
+  workspaceFiles(workspaceId: $workspaceId, folderId: $folderId, pagination: $pagination) {
+    files {
+      id
+      filename
+      originalName
+      mimeType
+      size
+      humanSize
+      storageProvider
+      uploader {
+        id
+        firstName
+        lastName
+      }
+      metadata {
+        width
+        height
+        duration
+        pageCount
+      }
+      thumbnails {
+        id
+        size
+        url
+        width
+        height
+      }
+      downloadCount
+      viewCount
+      createdAt
+      updatedAt
+    }
+    totalCount
+    hasNextPage
+  }
+}
+
+# Get file with detailed information
+query GetFileDetails($fileId: ID!) {
+  file(id: $fileId) {
+    id
+    filename
+    originalName
+    mimeType
+    size
+    humanSize
+    storageProvider
+    visibility
+    status
+    uploader {
+      id
+      firstName
+      lastName
+      email
+    }
+    folder {
+      id
+      name
+      path
+    }
+    metadata {
+      width
+      height
+      duration
+      extractedText
+      customFields {
+        key
+        value
+        type
+      }
+      virusScanResult {
+        scanned
+        clean
+        threats
+        scanDate
+      }
+    }
+    versions {
+      id
+      version
+      filename
+      size
+      uploadedBy
+      comment
+      createdAt
+    }
+    shares {
+      id
+      shareType
+      shareUrl
+      expiresAt
+      downloadCount
+      maxDownloads
+      createdAt
+    }
+    permissions {
+      canView
+      canDownload
+      canEdit
+      canDelete
+      canShare
+    }
+    tags
+    downloadCount
+    viewCount
+    createdAt
+    updatedAt
+  }
+}
+
+# Get user notifications
+query GetUserNotifications($pagination: PaginationInput, $unreadOnly: Boolean) {
+  me {
+    id
+    notifications(pagination: $pagination, unreadOnly: $unreadOnly) {
+      id
+      type
+      title
+      message
+      priority
+      read
+      createdAt
+      readAt
+      expiresAt
+    }
+  }
+}
+
+# Complex query with multiple services
+query GetDashboardData($workspaceId: ID!) {
+  # Workspace information
+  workspace(id: $workspaceId) {
+    id
+    name
+    plan
+    memberCount
+    projectCount
+    usage {
+      storage {
+        totalUsed
+        totalLimit
+        percentage
+      }
+      apiCalls {
+        totalCalls
+        monthlyLimit
+        remaining
+      }
+    }
+  }
+  
+  # Recent files
+  workspaceFiles(workspaceId: $workspaceId, pagination: { limit: 5 }) {
+    files {
+      id
+      filename
+      mimeType
+      size
+      uploader {
+        firstName
+        lastName
+      }
+      createdAt
+    }
+  }
+  
+  # Airtable bases
+  workspaceAirtableBases(workspaceId: $workspaceId, pagination: { limit: 5 }) {
+    bases {
+      id
+      name
+      connectionStatus
+      recordCount
+      lastSyncAt
+    }
+  }
+  
+  # Recent projects
+  workspaceProjects(workspaceId: $workspaceId, pagination: { limit: 5 }) {
+    projects {
+      id
+      name
+      status
+      priority
+      progress
+      deadline
+      owner {
+        firstName
+        lastName
+      }
+    }
+  }
+}
+
+# Statistics queries
+query GetPlatformStatistics {
+  userStatistics {
+    totalUsers
+    activeUsers
+    newUsersToday
+    usersByRole {
+      role
+      count
+    }
+  }
+  
+  workspaceStatistics {
+    totalWorkspaces
+    activeWorkspaces
+    workspacesByPlan {
+      plan
+      count
+    }
+    averageMembersPerWorkspace
+  }
+  
+  airtableStatistics {
+    totalBases
+    connectedBases
+    totalRecords
+    syncOperationsToday
+    apiCallsToday
+  }
+  
+  fileStatistics {
+    totalFiles
+    totalSize
+    filesByType {
+      mimeType
+      count
+      totalSize
+    }
+    uploadsToday
+    downloadCount
+  }
+}

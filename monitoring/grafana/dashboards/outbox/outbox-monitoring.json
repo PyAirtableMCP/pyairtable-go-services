@@ -1,0 +1,382 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "PyAirtable Outbox Pattern Monitoring",
+    "tags": ["pyairtable", "outbox", "events", "reliability"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Outbox Queue Overview",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(pyairtable_outbox_events_in_queue) by (status)",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "displayMode": "list",
+              "orientation": "horizontal"
+            },
+            "mappings": [],
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1000},
+                {"color": "red", "value": 5000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Event Processing Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(pyairtable_outbox_events_processed_total[5m])",
+            "legendFormat": "{{status}} events/sec"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Events per second",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Event Processing Latency",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(pyairtable_outbox_event_processing_duration_seconds_bucket[5m]))",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(pyairtable_outbox_event_processing_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(pyairtable_outbox_event_processing_duration_seconds_bucket[5m]))",
+            "legendFormat": "P99"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Seconds",
+            "min": 0
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [30], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["B", "5m", "now"]},
+              "reducer": {"params": [], "type": "last"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "for": "5m",
+          "frequency": "10s",
+          "handler": 1,
+          "name": "High Processing Latency",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 4,
+        "title": "Error Rate",
+        "type": "singlestat",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(pyairtable_outbox_event_errors_total[5m]) / rate(pyairtable_outbox_events_processed_total[5m]) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ],
+        "valueMaps": [
+          {"op": "=", "text": "N/A", "value": "null"}
+        ],
+        "thresholds": "5,10",
+        "colorBackground": true,
+        "colorValue": false,
+        "colors": ["green", "yellow", "red"],
+        "format": "percent",
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 20
+        }
+      },
+      {
+        "id": 5,
+        "title": "Worker Health",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "pyairtable_outbox_worker_health",
+            "legendFormat": "{{worker_id}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Health Status",
+            "min": 0,
+            "max": 1
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Publisher Health",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "pyairtable_outbox_publisher_health",
+            "legendFormat": "{{publisher_type}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Health Status",
+            "min": 0,
+            "max": 1
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Queue Depth by Status",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "pyairtable_outbox_events_in_queue",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Number of Events",
+            "min": 0
+          }
+        ],
+        "stack": true,
+        "fill": 1
+      },
+      {
+        "id": 8,
+        "title": "Event Type Distribution",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "sum by (event_type) (rate(pyairtable_outbox_event_type_distribution[1h]))",
+            "legendFormat": "{{event_type}}"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Tenant Distribution",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "targets": [
+          {
+            "expr": "sum by (tenant_id) (rate(pyairtable_outbox_tenant_distribution[1h]))",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "SLA Compliance",
+        "type": "singlestat",
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 40},
+        "targets": [
+          {
+            "expr": "pyairtable_outbox_sla_compliance{sla_type=\"processing_latency\"} * 100",
+            "legendFormat": "SLA Compliance %"
+          }
+        ],
+        "thresholds": "90,95",
+        "colorBackground": true,
+        "colors": ["red", "yellow", "green"],
+        "format": "percent",
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 100
+        }
+      },
+      {
+        "id": 11,
+        "title": "Retry Distribution",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 40},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(pyairtable_outbox_retry_attempts_bucket[5m]))",
+            "legendFormat": "P50 Retries"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(pyairtable_outbox_retry_attempts_bucket[5m]))",
+            "legendFormat": "P95 Retries"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Number of Retries",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Database Connections",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 40},
+        "targets": [
+          {
+            "expr": "pyairtable_outbox_database_connections",
+            "legendFormat": "{{state}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Connections",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Top Event Types by Volume",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 46},
+        "targets": [
+          {
+            "expr": "topk(10, sum by (event_type) (rate(pyairtable_outbox_events_processed_total[1h])))",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "styles": [
+          {
+            "alias": "Event Type",
+            "pattern": "event_type",
+            "type": "string"
+          },
+          {
+            "alias": "Events/Hour",
+            "pattern": "Value",
+            "type": "number",
+            "unit": "short",
+            "decimals": 2
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "Failed Events by Error Type",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 46},
+        "targets": [
+          {
+            "expr": "topk(10, sum by (error_type) (rate(pyairtable_outbox_event_errors_total[1h])))",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "styles": [
+          {
+            "alias": "Error Type",
+            "pattern": "error_type",
+            "type": "string"
+          },
+          {
+            "alias": "Errors/Hour",
+            "pattern": "Value",
+            "type": "number",
+            "unit": "short",
+            "decimals": 2
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "title": "Worker Utilization",
+        "type": "heatmap",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 54},
+        "targets": [
+          {
+            "expr": "pyairtable_outbox_worker_utilization",
+            "legendFormat": "{{worker_id}}"
+          }
+        ],
+        "heatmap": {
+          "xBucketSize": null,
+          "yBucketSize": null,
+          "yBucketBound": "auto"
+        },
+        "tooltip": {
+          "show": true,
+          "showHistogram": true
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "service",
+          "type": "query",
+          "query": "label_values(pyairtable_outbox_events_in_queue, service)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        },
+        {
+          "name": "tenant",
+          "type": "query",
+          "query": "label_values(pyairtable_outbox_events_in_queue{service=~\"$service\"}, tenant_id)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "prometheus",
+          "expr": "changes(up[30m]) > 0",
+          "iconColor": "rgba(255, 96, 96, 1)",
+          "titleFormat": "Deployment",
+          "textFormat": "Service deployment detected"
+        }
+      ]
+    }
+  }
+}

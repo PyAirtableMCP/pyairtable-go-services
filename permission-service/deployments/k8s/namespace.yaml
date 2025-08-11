@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: permissionservice
+  labels:
+    name: permissionservice
+    app: permissionservice
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: permissionservice-limit-range
+  namespace: permissionservice
+spec:
+  limits:
+  - default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    type: Container

@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mobilebff
+  labels:
+    name: mobilebff
+    app: mobilebff
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mobilebff-limit-range
+  namespace: mobilebff
+spec:
+  limits:
+  - default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    type: Container

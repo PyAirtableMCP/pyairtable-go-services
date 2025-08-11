@@ -1,0 +1,272 @@
+groups:
+  - name: outbox.rules
+    rules:
+      # Queue depth alerts
+      - alert: OutboxQueueDepthHigh
+        expr: pyairtable_outbox_events_in_queue{status="pending"} > 1000
+        for: 2m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "High number of pending events in outbox queue"
+          description: "Outbox queue for tenant {{ $labels.tenant_id }} has {{ $value }} pending events, which is above the warning threshold of 1000."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-queue-depth"
+
+      - alert: OutboxQueueDepthCritical
+        expr: pyairtable_outbox_events_in_queue{status="pending"} > 5000
+        for: 1m
+        labels:
+          severity: critical
+          component: outbox
+          team: platform
+        annotations:
+          summary: "Critical number of pending events in outbox queue"
+          description: "Outbox queue for tenant {{ $labels.tenant_id }} has {{ $value }} pending events, which is above the critical threshold of 5000. This may indicate processing issues."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-queue-depth"
+
+      # Processing latency alerts
+      - alert: OutboxProcessingLatencyHigh
+        expr: histogram_quantile(0.95, rate(pyairtable_outbox_event_processing_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "High outbox event processing latency"
+          description: "95th percentile of outbox event processing latency is {{ $value }}s, which is above the 30s threshold."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-latency"
+
+      - alert: OutboxProcessingLatencyCritical
+        expr: histogram_quantile(0.99, rate(pyairtable_outbox_event_processing_duration_seconds_bucket[5m])) > 60
+        for: 2m
+        labels:
+          severity: critical
+          component: outbox
+          team: platform
+        annotations:
+          summary: "Critical outbox event processing latency"
+          description: "99th percentile of outbox event processing latency is {{ $value }}s, which is above the 60s critical threshold."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-latency"
+
+      # Error rate alerts
+      - alert: OutboxErrorRateHigh
+        expr: (rate(pyairtable_outbox_event_errors_total[5m]) / rate(pyairtable_outbox_events_processed_total[5m])) * 100 > 5
+        for: 3m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "High outbox event error rate"
+          description: "Outbox event error rate is {{ $value | humanizePercentage }}, which is above the 5% warning threshold."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-errors"
+
+      - alert: OutboxErrorRateCritical
+        expr: (rate(pyairtable_outbox_event_errors_total[5m]) / rate(pyairtable_outbox_events_processed_total[5m])) * 100 > 10
+        for: 1m
+        labels:
+          severity: critical
+          component: outbox
+          team: platform
+        annotations:
+          summary: "Critical outbox event error rate"
+          description: "Outbox event error rate is {{ $value | humanizePercentage }}, which is above the 10% critical threshold."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-errors"
+
+      # Worker health alerts
+      - alert: OutboxWorkerUnhealthy
+        expr: pyairtable_outbox_worker_health == 0
+        for: 1m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "Outbox worker is unhealthy"
+          description: "Outbox worker {{ $labels.worker_id }} in processor {{ $labels.processor_id }} is reporting as unhealthy."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-worker-health"
+
+      - alert: OutboxAllWorkersUnhealthy
+        expr: count by (processor_id) (pyairtable_outbox_worker_health == 1) == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: outbox
+          team: platform
+        annotations:
+          summary: "All outbox workers are unhealthy"
+          description: "All outbox workers in processor {{ $labels.processor_id }} are unhealthy. Event processing may be stopped."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-worker-health"
+
+      # Publisher health alerts
+      - alert: OutboxPublisherUnhealthy
+        expr: pyairtable_outbox_publisher_health == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "Outbox publisher is unhealthy"
+          description: "Outbox publisher {{ $labels.publisher_type }} ({{ $labels.publisher_id }}) is reporting as unhealthy."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-publisher-health"
+
+      - alert: OutboxPublisherLatencyHigh
+        expr: histogram_quantile(0.95, rate(pyairtable_outbox_publisher_latency_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "High outbox publisher latency"
+          description: "95th percentile of outbox publisher {{ $labels.publisher_type }} latency is {{ $value }}s, which is above the 10s threshold."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-publisher-latency"
+
+      # SLA compliance alerts
+      - alert: OutboxSLAComplianceLow
+        expr: pyairtable_outbox_sla_compliance{sla_type="processing_latency"} < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "Outbox SLA compliance below target"
+          description: "Outbox processing latency SLA compliance is {{ $value | humanizePercentage }}, which is below the 95% target."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-sla"
+
+      - alert: OutboxSLAComplianceCritical
+        expr: pyairtable_outbox_sla_compliance{sla_type="processing_latency"} < 0.90
+        for: 2m
+        labels:
+          severity: critical
+          component: outbox
+          team: platform
+        annotations:
+          summary: "Outbox SLA compliance critically low"
+          description: "Outbox processing latency SLA compliance is {{ $value | humanizePercentage }}, which is critically below the 90% threshold."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-sla"
+
+      # Processing stalled alerts
+      - alert: OutboxProcessingStalled
+        expr: rate(pyairtable_outbox_events_processed_total[5m]) == 0 and pyairtable_outbox_events_in_queue{status="pending"} > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: outbox
+          team: platform
+        annotations:
+          summary: "Outbox event processing appears stalled"
+          description: "No events have been processed in the last 5 minutes, but there are {{ $value }} pending events in the queue."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-stalled"
+
+      # Database connectivity alerts
+      - alert: OutboxDatabaseConnectivityIssue
+        expr: pyairtable_outbox_database_connections{state="open"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: outbox
+          team: platform
+        annotations:
+          summary: "Outbox database connectivity issue"
+          description: "Outbox service has no open database connections. This will prevent event processing."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-database"
+
+      # Retry pattern alerts
+      - alert: OutboxHighRetryRate
+        expr: rate(pyairtable_outbox_retry_attempts_total[5m]) > 10
+        for: 3m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "High outbox event retry rate"
+          description: "Outbox event retry rate is {{ $value }} retries/second, which may indicate upstream service issues."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-retries"
+
+      # Memory and resource alerts
+      - alert: OutboxHighMemoryUsage
+        expr: pyairtable_outbox_memory_usage_bytes / (1024 * 1024 * 1024) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "High outbox memory usage"
+          description: "Outbox service memory usage is {{ $value | humanize }}GB, which is above the 1GB threshold."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-resources"
+
+      - alert: OutboxHighCPUUsage
+        expr: pyairtable_outbox_cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "High outbox CPU usage"
+          description: "Outbox service CPU usage is {{ $value }}%, which is above the 80% threshold."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-resources"
+
+      # Circuit breaker alerts
+      - alert: OutboxCircuitBreakerOpen
+        expr: pyairtable_outbox_circuit_breaker_state == 2
+        for: 1m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "Outbox circuit breaker is open"
+          description: "Circuit breaker for outbox publisher {{ $labels.publisher }} is open, preventing event publishing."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-circuit-breaker"
+
+      # Tenant-specific alerts
+      - alert: OutboxTenantProcessingIssue
+        expr: pyairtable_outbox_events_in_queue{status="pending"} > 500 and rate(pyairtable_outbox_events_processed_total[5m]) == 0
+        for: 3m
+        labels:
+          severity: warning
+          component: outbox
+          team: platform
+        annotations:
+          summary: "Outbox processing issue for specific tenant"
+          description: "Tenant {{ $labels.tenant_id }} has {{ $value }} pending events but no processing activity in the last 5 minutes."
+          runbook_url: "https://docs.pyairtable.com/runbooks/outbox-tenant-issues"
+
+  - name: outbox.recording.rules
+    rules:
+      # Recording rules for better performance on complex queries
+      - record: outbox:event_processing_rate
+        expr: rate(pyairtable_outbox_events_processed_total[5m])
+
+      - record: outbox:error_rate
+        expr: rate(pyairtable_outbox_event_errors_total[5m]) / rate(pyairtable_outbox_events_processed_total[5m])
+
+      - record: outbox:queue_depth_by_status
+        expr: sum by (status, tenant_id) (pyairtable_outbox_events_in_queue)
+
+      - record: outbox:processing_latency_p95
+        expr: histogram_quantile(0.95, rate(pyairtable_outbox_event_processing_duration_seconds_bucket[5m]))
+
+      - record: outbox:processing_latency_p99
+        expr: histogram_quantile(0.99, rate(pyairtable_outbox_event_processing_duration_seconds_bucket[5m]))
+
+      - record: outbox:worker_health_ratio
+        expr: sum by (processor_id) (pyairtable_outbox_worker_health) / count by (processor_id) (pyairtable_outbox_worker_health)
+
+      - record: outbox:publisher_health_ratio
+        expr: sum by (publisher_type) (pyairtable_outbox_publisher_health) / count by (publisher_type) (pyairtable_outbox_publisher_health)
+
+      - record: outbox:daily_event_volume
+        expr: increase(pyairtable_outbox_events_processed_total[24h])
+
+      - record: outbox:hourly_error_count
+        expr: increase(pyairtable_outbox_event_errors_total[1h])

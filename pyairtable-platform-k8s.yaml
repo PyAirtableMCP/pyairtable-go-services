@@ -1,0 +1,192 @@
+# Kubernetes deployment configuration for PyAirtable Platform
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pyairtable-platform
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pyairtable-platform-config
+  namespace: pyairtable-platform
+data:
+  PORT: "8080"
+  LOG_LEVEL: "info"
+  REDIS_URL: "redis://redis:6379"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pyairtable-platform-secrets
+  namespace: pyairtable-platform
+type: Opaque
+data:
+  # Base64 encoded values - update these in production
+  DATABASE_URL: cG9zdGdyZXM6Ly9wb3N0Z3Jlczpwb3N0Z3Jlc0Bwb3N0Z3Jlczo1NDMyL3B5YWlydGFibGU/c3NsbW9kZT1kaXNhYmxl
+  JWT_SECRET: eW91ci1zZWNyZXQta2V5LWNoYW5nZS1pbi1wcm9kdWN0aW9u
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pyairtable-platform
+  namespace: pyairtable-platform
+  labels:
+    app: pyairtable-platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pyairtable-platform
+  template:
+    metadata:
+      labels:
+        app: pyairtable-platform
+    spec:
+      containers:
+      - name: pyairtable-platform
+        image: pyairtable-platform:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: pyairtable-platform-config
+              key: PORT
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: pyairtable-platform-config
+              key: LOG_LEVEL
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: pyairtable-platform-config
+              key: REDIS_URL
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: pyairtable-platform-secrets
+              key: DATABASE_URL
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: pyairtable-platform-secrets
+              key: JWT_SECRET
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pyairtable-platform-service
+  namespace: pyairtable-platform
+spec:
+  selector:
+    app: pyairtable-platform
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pyairtable-platform-ingress
+  namespace: pyairtable-platform
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - api.pyairtable.com
+    secretName: pyairtable-platform-tls
+  rules:
+  - host: api.pyairtable.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: pyairtable-platform-service
+            port:
+              number: 80
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pyairtable-platform-hpa
+  namespace: pyairtable-platform
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pyairtable-platform
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pyairtable-platform-sa
+  namespace: pyairtable-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: pyairtable-platform
+  name: pyairtable-platform-role
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pyairtable-platform-rolebinding
+  namespace: pyairtable-platform
+subjects:
+- kind: ServiceAccount
+  name: pyairtable-platform-sa
+  namespace: pyairtable-platform
+roleRef:
+  kind: Role
+  name: pyairtable-platform-role
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,54 @@
+{
+  "name": "@pyairtable/plugin-sdk",
+  "version": "1.0.0",
+  "description": "PyAirtable Plugin SDK for TypeScript/JavaScript",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "pyairtable",
+    "plugin",
+    "sdk",
+    "typescript",
+    "webassembly",
+    "wasm"
+  ],
+  "author": "PyAirtable Team",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.45.0",
+    "jest": "^29.6.0",
+    "prettier": "^3.0.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.1.0"
+  },
+  "peerDependencies": {
+    "typescript": ">=4.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pyairtable/plugin-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/pyairtable/plugin-sdk/issues"
+  },
+  "homepage": "https://github.com/pyairtable/plugin-sdk#readme"
+}

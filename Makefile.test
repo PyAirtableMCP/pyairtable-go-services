@@ -1,0 +1,202 @@
+# Go Services Testing Makefile
+
+# Go parameters
+GOCMD=go
+GOBUILD=$(GOCMD) build
+GOCLEAN=$(GOCMD) clean
+GOTEST=$(GOCMD) test
+GOGET=$(GOCMD) get
+GOMOD=$(GOCMD) mod
+GOFMT=gofmt
+
+# Test parameters
+TEST_PATTERN=./...
+TEST_FLAGS=-v -race -coverprofile=coverage.out -covermode=atomic
+INTEGRATION_FLAGS=-tags=integration
+BENCHMARK_FLAGS=-bench=. -benchmem
+COVERAGE_FLAGS=-func=coverage.out
+
+# Directories
+SRC_DIR=.
+TEST_DIR=./tests
+COVERAGE_DIR=./coverage
+BIN_DIR=./bin
+
+# Docker parameters
+DOCKER_COMPOSE_TEST=docker-compose -f docker-compose.test.yml
+
+.PHONY: help test test-unit test-integration test-e2e test-all coverage clean setup-test-env teardown-test-env benchmark lint fmt deps-test
+
+help: ## Display this help message
+	@echo "Available commands:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+setup-test-env: ## Set up test environment with Docker containers
+	@echo "Setting up test environment..."
+	$(DOCKER_COMPOSE_TEST) up -d postgres-test redis-test
+	@echo "Waiting for services to be ready..."
+	@sleep 10
+	@echo "Running database migrations..."
+	@make migrate-test
+
+teardown-test-env: ## Tear down test environment
+	@echo "Tearing down test environment..."
+	$(DOCKER_COMPOSE_TEST) down -v
+
+migrate-test: ## Run database migrations for testing
+	@echo "Running test database migrations..."
+	@export DATABASE_URL="postgresql://test:test@localhost:5433/test_db" && \
+	 go run cmd/migrate/main.go up
+
+deps-test: ## Install test dependencies
+	@echo "Installing test dependencies..."
+	$(GOGET) -t ./...
+	$(GOGET) github.com/stretchr/testify/assert
+	$(GOGET) github.com/stretchr/testify/mock
+	$(GOGET) github.com/stretchr/testify/suite
+	$(GOGET) github.com/testcontainers/testcontainers-go
+	$(GOGET) github.com/testcontainers/testcontainers-go/modules/postgres
+	$(GOGET) github.com/testcontainers/testcontainers-go/modules/redis
+	$(GOGET) github.com/golang/mock/gomock
+	$(GOGET) github.com/golang/mock/mockgen
+
+generate-mocks: ## Generate mock files
+	@echo "Generating mocks..."
+	@find . -name "*.go" -type f -exec grep -l "//go:generate mockgen" {} \; | xargs -I {} go generate {}
+
+test-unit: ## Run unit tests
+	@echo "Running unit tests..."
+	@mkdir -p $(COVERAGE_DIR)
+	$(GOTEST) $(TEST_FLAGS) -short $(TEST_PATTERN) | tee $(COVERAGE_DIR)/unit-test.log
+	@echo "Unit test coverage:"
+	$(GOCMD) tool cover $(COVERAGE_FLAGS)
+
+test-integration: setup-test-env ## Run integration tests
+	@echo "Running integration tests..."
+	@mkdir -p $(COVERAGE_DIR)
+	$(GOTEST) $(TEST_FLAGS) $(INTEGRATION_FLAGS) $(TEST_PATTERN) | tee $(COVERAGE_DIR)/integration-test.log
+	@echo "Integration test coverage:"
+	$(GOCMD) tool cover $(COVERAGE_FLAGS)
+
+test-e2e: setup-test-env ## Run end-to-end tests
+	@echo "Running end-to-end tests..."
+	@mkdir -p $(COVERAGE_DIR)
+	$(GOTEST) $(TEST_FLAGS) -tags=e2e $(TEST_PATTERN) | tee $(COVERAGE_DIR)/e2e-test.log
+
+test-all: deps-test generate-mocks test-unit test-integration test-e2e ## Run all tests
+	@echo "All tests completed!"
+
+test: test-unit ## Run unit tests only (default)
+
+benchmark: ## Run benchmark tests
+	@echo "Running benchmark tests..."
+	@mkdir -p $(COVERAGE_DIR)
+	$(GOTEST) $(BENCHMARK_FLAGS) $(TEST_PATTERN) | tee $(COVERAGE_DIR)/benchmark.log
+
+coverage: test-unit ## Generate test coverage report
+	@echo "Generating coverage report..."
+	@mkdir -p $(COVERAGE_DIR)
+	$(GOCMD) tool cover -html=coverage.out -o $(COVERAGE_DIR)/coverage.html
+	@echo "Coverage report generated: $(COVERAGE_DIR)/coverage.html"
+	$(GOCMD) tool cover $(COVERAGE_FLAGS)
+
+coverage-ci: ## Run tests and generate coverage for CI
+	@echo "Running tests with coverage for CI..."
+	$(GOTEST) $(TEST_FLAGS) $(TEST_PATTERN)
+	$(GOCMD) tool cover -func=coverage.out
+
+lint: ## Run linters
+	@echo "Running linters..."
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	else \
+		echo "golangci-lint not installed, running basic checks..."; \
+		$(GOFMT) -l -s .; \
+		$(GOCMD) vet ./...; \
+	fi
+
+fmt: ## Format Go code
+	@echo "Formatting Go code..."
+	$(GOFMT) -l -s -w .
+
+vet: ## Run go vet
+	@echo "Running go vet..."
+	$(GOCMD) vet ./...
+
+clean: ## Clean test artifacts
+	@echo "Cleaning test artifacts..."
+	$(GOCLEAN)
+	rm -rf $(COVERAGE_DIR)
+	rm -f coverage.out
+	rm -rf $(BIN_DIR)
+
+clean-all: clean teardown-test-env ## Clean everything including test environment
+
+test-watch: ## Run tests in watch mode (requires entr)
+	@echo "Running tests in watch mode..."
+	@find . -name "*.go" | entr -c make test-unit
+
+test-specific: ## Run specific test (usage: make test-specific TEST=TestName)
+	@echo "Running specific test: $(TEST)"
+	$(GOTEST) $(TEST_FLAGS) -run $(TEST) $(TEST_PATTERN)
+
+test-package: ## Run tests for specific package (usage: make test-package PKG=./internal/auth)
+	@echo "Running tests for package: $(PKG)"
+	$(GOTEST) $(TEST_FLAGS) $(PKG)
+
+security-scan: ## Run security scan
+	@echo "Running security scan..."
+	@if command -v gosec >/dev/null 2>&1; then \
+		gosec ./...; \
+	else \
+		echo "gosec not installed, skipping security scan"; \
+	fi
+
+test-race: ## Run tests with race detector
+	@echo "Running tests with race detector..."
+	$(GOTEST) -race $(TEST_PATTERN)
+
+test-stress: ## Run stress tests
+	@echo "Running stress tests..."
+	$(GOTEST) -count=100 -short $(TEST_PATTERN)
+
+validate-coverage: ## Validate test coverage meets threshold
+	@echo "Validating test coverage..."
+	@$(GOCMD) tool cover -func=coverage.out | awk '/^total:/ {print "Total coverage:", $$3}' | \
+	 awk -F: '{gsub(/%/, "", $$2); if($$2 < 80) {print "Coverage below 80%:", $$2"%"; exit 1} else {print "Coverage OK:", $$2"%"}}'
+
+deps-update: ## Update Go dependencies
+	@echo "Updating Go dependencies..."
+	$(GOGET) -u ./...
+	$(GOMOD) tidy
+
+deps-vendor: ## Vendor dependencies
+	@echo "Vendoring dependencies..."
+	$(GOMOD) vendor
+
+install-tools: ## Install testing tools
+	@echo "Installing testing tools..."
+	$(GOGET) github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	$(GOGET) github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+	$(GOGET) github.com/golang/mock/mockgen@latest
+
+# Service-specific test targets
+test-auth: ## Test auth service only
+	@echo "Testing auth service..."
+	$(GOTEST) $(TEST_FLAGS) ./auth-service/...
+
+test-api-gateway: ## Test API gateway only
+	@echo "Testing API gateway..."
+	$(GOTEST) $(TEST_FLAGS) ./api-gateway/...
+
+test-user: ## Test user service only  
+	@echo "Testing user service..."
+	$(GOTEST) $(TEST_FLAGS) ./user-service/...
+
+# CI/CD targets
+ci-test: deps-test generate-mocks lint test-unit test-integration coverage-ci validate-coverage ## Run CI test suite
+
+cd-test: setup-test-env test-e2e teardown-test-env ## Run CD test suite
+
+# Default target
+all: test-all

@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: userservice
+  namespace: userservice
+  labels:
+    app: userservice
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8082"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8082
+    protocol: TCP
+    name: http
+  selector:
+    app: userservice
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: userservice-headless
+  namespace: userservice
+  labels:
+    app: userservice
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - port: 8082
+    targetPort: 8082
+    protocol: TCP
+    name: http
+  selector:
+    app: userservice

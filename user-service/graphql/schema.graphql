@@ -1,0 +1,678 @@
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.3"
+        import: ["@key", "@shareable", "@provides", "@requires", "@external", "@tag", "@inaccessible"])
+
+"""
+User entity representing a PyAirtable user
+"""
+type User @key(fields: "id") {
+  id: ID!
+  email: String!
+  username: String
+  firstName: String
+  lastName: String
+  displayName: String
+  avatar: String
+  role: UserRole!
+  status: UserStatus!
+  emailVerified: Boolean!
+  phoneNumber: String
+  timezone: String
+  locale: String
+  preferences: UserPreferences
+  profile: UserProfile
+  permissions: [Permission!]! @requires(fields: "id")
+  workspaces: [WorkspaceMembership!]! @requires(fields: "id")
+  notifications: [Notification!]! @requires(fields: "id")
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  lastLoginAt: DateTime
+  lastActiveAt: DateTime
+}
+
+"""
+User role enumeration
+"""
+enum UserRole {
+  ADMIN
+  PREMIUM_USER
+  STANDARD_USER
+  FREE_USER
+  GUEST
+}
+
+"""
+User status enumeration
+"""
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+  DEACTIVATED
+}
+
+"""
+User preferences for customization
+"""
+type UserPreferences {
+  theme: Theme!
+  language: String!
+  dateFormat: String!
+  timeFormat: String!
+  notifications: NotificationPreferences!
+  dashboard: DashboardPreferences!
+  privacy: PrivacyPreferences!
+}
+
+"""
+Theme preferences
+"""
+enum Theme {
+  LIGHT
+  DARK
+  AUTO
+}
+
+"""
+Notification preferences
+"""
+type NotificationPreferences {
+  email: Boolean!
+  push: Boolean!
+  sms: Boolean!
+  desktop: Boolean!
+  digest: DigestFrequency!
+}
+
+"""
+Digest frequency options
+"""
+enum DigestFrequency {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+"""
+Dashboard preferences
+"""
+type DashboardPreferences {
+  layout: DashboardLayout!
+  widgets: [String!]!
+  refreshInterval: Int!
+}
+
+"""
+Dashboard layout options
+"""
+enum DashboardLayout {
+  GRID
+  LIST
+  CARDS
+}
+
+"""
+Privacy preferences
+"""
+type PrivacyPreferences {
+  profileVisibility: ProfileVisibility!
+  activityVisibility: ActivityVisibility!
+  searchable: Boolean!
+}
+
+"""
+Profile visibility options
+"""
+enum ProfileVisibility {
+  PUBLIC
+  WORKSPACE_MEMBERS
+  PRIVATE
+}
+
+"""
+Activity visibility options
+"""
+enum ActivityVisibility {
+  PUBLIC
+  WORKSPACE_MEMBERS
+  PRIVATE
+}
+
+"""
+Detailed user profile information
+"""
+type UserProfile {
+  bio: String
+  website: String
+  company: String
+  jobTitle: String
+  department: String
+  location: String
+  skills: [String!]!
+  interests: [String!]!
+  socialLinks: [SocialLink!]!
+}
+
+"""
+Social media links
+"""
+type SocialLink {
+  platform: SocialPlatform!
+  url: String!
+}
+
+"""
+Social platform enumeration
+"""
+enum SocialPlatform {
+  TWITTER
+  LINKEDIN
+  GITHUB
+  FACEBOOK
+  INSTAGRAM
+  YOUTUBE
+  DISCORD
+  SLACK
+}
+
+"""
+User permission
+"""
+type Permission @key(fields: "id") {
+  id: ID!
+  name: String!
+  description: String
+  category: PermissionCategory!
+  scope: PermissionScope!
+}
+
+"""
+Permission categories
+"""
+enum PermissionCategory {
+  USER_MANAGEMENT
+  WORKSPACE_MANAGEMENT
+  AIRTABLE_ACCESS
+  FILE_MANAGEMENT
+  ANALYTICS
+  AI_FEATURES
+  BILLING
+  ADMIN
+}
+
+"""
+Permission scope
+"""
+enum PermissionScope {
+  GLOBAL
+  WORKSPACE
+  PROJECT
+  RESOURCE
+}
+
+"""
+Workspace membership information
+"""
+type WorkspaceMembership @key(fields: "id") {
+  id: ID!
+  userId: ID! @external
+  workspaceId: ID! @external
+  role: WorkspaceRole!
+  permissions: [Permission!]!
+  joinedAt: DateTime!
+  invitedBy: ID
+  status: MembershipStatus!
+}
+
+"""
+Workspace role enumeration
+"""
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+  GUEST
+}
+
+"""
+Membership status
+"""
+enum MembershipStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  INACTIVE
+}
+
+"""
+User notification
+"""
+type Notification @key(fields: "id") {
+  id: ID!
+  userId: ID! @external
+  type: NotificationType!
+  title: String!
+  message: String!
+  data: JSON
+  read: Boolean!
+  priority: NotificationPriority!
+  channel: NotificationChannel!
+  createdAt: DateTime!
+  readAt: DateTime
+  expiresAt: DateTime
+}
+
+"""
+Notification types
+"""
+enum NotificationType {
+  WORKSPACE_INVITATION
+  AIRTABLE_RECORD_UPDATED
+  FILE_SHARED
+  PERMISSION_GRANTED
+  SYSTEM_ANNOUNCEMENT
+  AI_PROCESSING_COMPLETE
+  BILLING_NOTIFICATION
+}
+
+"""
+Notification priority
+"""
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+"""
+Notification channels
+"""
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+  SMS
+}
+
+"""
+Date/time scalar
+"""
+scalar DateTime
+
+"""
+JSON scalar for flexible data
+"""
+scalar JSON
+
+"""
+User authentication input
+"""
+input LoginInput {
+  email: String!
+  password: String!
+  rememberMe: Boolean = false
+  deviceInfo: DeviceInfoInput
+}
+
+"""
+Device information for security tracking
+"""
+input DeviceInfoInput {
+  userAgent: String!
+  ip: String!
+  deviceId: String
+  platform: String
+  browser: String
+}
+
+"""
+User registration input
+"""
+input RegisterInput {
+  email: String!
+  password: String!
+  firstName: String!
+  lastName: String!
+  username: String
+  acceptTerms: Boolean!
+  marketingOptIn: Boolean = false
+}
+
+"""
+User update input
+"""
+input UpdateUserInput {
+  firstName: String
+  lastName: String
+  username: String
+  avatar: String
+  phoneNumber: String
+  timezone: String
+  locale: String
+  preferences: UpdateUserPreferencesInput
+  profile: UpdateUserProfileInput
+}
+
+"""
+User preferences update input
+"""
+input UpdateUserPreferencesInput {
+  theme: Theme
+  language: String
+  dateFormat: String
+  timeFormat: String
+  notifications: UpdateNotificationPreferencesInput
+  dashboard: UpdateDashboardPreferencesInput
+  privacy: UpdatePrivacyPreferencesInput
+}
+
+"""
+Notification preferences update input
+"""
+input UpdateNotificationPreferencesInput {
+  email: Boolean
+  push: Boolean
+  sms: Boolean
+  desktop: Boolean
+  digest: DigestFrequency
+}
+
+"""
+Dashboard preferences update input
+"""
+input UpdateDashboardPreferencesInput {
+  layout: DashboardLayout
+  widgets: [String!]
+  refreshInterval: Int
+}
+
+"""
+Privacy preferences update input
+"""
+input UpdatePrivacyPreferencesInput {
+  profileVisibility: ProfileVisibility
+  activityVisibility: ActivityVisibility
+  searchable: Boolean
+}
+
+"""
+User profile update input
+"""
+input UpdateUserProfileInput {
+  bio: String
+  website: String
+  company: String
+  jobTitle: String
+  department: String
+  location: String
+  skills: [String!]
+  interests: [String!]
+  socialLinks: [SocialLinkInput!]
+}
+
+"""
+Social link input
+"""
+input SocialLinkInput {
+  platform: SocialPlatform!
+  url: String!
+}
+
+"""
+Password change input
+"""
+input ChangePasswordInput {
+  currentPassword: String!
+  newPassword: String!
+}
+
+"""
+Password reset input
+"""
+input ResetPasswordInput {
+  token: String!
+  newPassword: String!
+}
+
+"""
+User search filters
+"""
+input UserSearchFilters {
+  role: UserRole
+  status: UserStatus
+  workspaceId: ID
+  skills: [String!]
+  location: String
+  company: String
+}
+
+"""
+Pagination input
+"""
+input PaginationInput {
+  limit: Int = 20
+  offset: Int = 0
+  cursor: String
+}
+
+"""
+Sort input
+"""
+input SortInput {
+  field: String!
+  direction: SortDirection = ASC
+}
+
+"""
+Sort direction
+"""
+enum SortDirection {
+  ASC
+  DESC
+}
+
+"""
+Paginated user results
+"""
+type PaginatedUsers {
+  users: [User!]!
+  totalCount: Int!
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  cursor: String
+}
+
+"""
+Authentication result
+"""
+type AuthResult {
+  success: Boolean!
+  token: String
+  refreshToken: String
+  user: User
+  expiresAt: DateTime
+  message: String
+}
+
+"""
+User activity log
+"""
+type UserActivity {
+  id: ID!
+  userId: ID!
+  action: UserAction!
+  resource: String
+  resourceId: ID
+  metadata: JSON
+  ip: String
+  userAgent: String
+  timestamp: DateTime!
+}
+
+"""
+User actions for activity tracking
+"""
+enum UserAction {
+  LOGIN
+  LOGOUT
+  PROFILE_UPDATE
+  PASSWORD_CHANGE
+  EMAIL_VERIFICATION
+  WORKSPACE_JOIN
+  WORKSPACE_LEAVE
+  AIRTABLE_ACCESS
+  FILE_UPLOAD
+  FILE_DOWNLOAD
+  PERMISSION_GRANTED
+  PERMISSION_REVOKED
+}
+
+"""
+User statistics
+"""
+type UserStatistics {
+  totalUsers: Int!
+  activeUsers: Int!
+  newUsersToday: Int!
+  newUsersThisWeek: Int!
+  newUsersThisMonth: Int!
+  usersByRole: [UserRoleCount!]!
+  usersByStatus: [UserStatusCount!]!
+}
+
+"""
+User count by role
+"""
+type UserRoleCount {
+  role: UserRole!
+  count: Int!
+}
+
+"""
+User count by status
+"""
+type UserStatusCount {
+  status: UserStatus!
+  count: Int!
+}
+
+type Query {
+  """Get current authenticated user"""
+  me: User
+
+  """Get user by ID"""
+  user(id: ID!): User
+
+  """Get users by IDs (for DataLoader)"""
+  users(ids: [ID!]!): [User]!
+
+  """Search users with filters"""
+  searchUsers(
+    query: String
+    filters: UserSearchFilters
+    pagination: PaginationInput
+    sort: SortInput
+  ): PaginatedUsers!
+
+  """Get user permissions"""
+  userPermissions(userId: ID!): [Permission!]!
+
+  """Get user notifications"""
+  userNotifications(
+    userId: ID!
+    unreadOnly: Boolean = false
+    pagination: PaginationInput
+  ): [Notification!]!
+
+  """Get user activity log"""
+  userActivity(
+    userId: ID!
+    actions: [UserAction!]
+    pagination: PaginationInput
+  ): [UserActivity!]!
+
+  """Get user statistics (admin only)"""
+  userStatistics: UserStatistics! @auth(requires: ADMIN)
+
+  """Validate username availability"""
+  isUsernameAvailable(username: String!): Boolean!
+
+  """Validate email availability"""
+  isEmailAvailable(email: String!): Boolean!
+}
+
+type Mutation {
+  """Register new user"""
+  register(input: RegisterInput!): AuthResult!
+
+  """Login user"""
+  login(input: LoginInput!): AuthResult!
+
+  """Logout current user"""
+  logout: Boolean!
+
+  """Refresh authentication token"""
+  refreshToken(refreshToken: String!): AuthResult!
+
+  """Update user profile"""
+  updateUser(input: UpdateUserInput!): User! @auth
+
+  """Change user password"""
+  changePassword(input: ChangePasswordInput!): Boolean! @auth
+
+  """Request password reset"""
+  requestPasswordReset(email: String!): Boolean!
+
+  """Reset password with token"""
+  resetPassword(input: ResetPasswordInput!): AuthResult!
+
+  """Verify email address"""
+  verifyEmail(token: String!): Boolean!
+
+  """Resend email verification"""
+  resendEmailVerification: Boolean! @auth
+
+  """Update user status (admin only)"""
+  updateUserStatus(userId: ID!, status: UserStatus!): User! @auth(requires: ADMIN)
+
+  """Grant permission to user (admin only)"""
+  grantPermission(userId: ID!, permissionId: ID!): Boolean! @auth(requires: ADMIN)
+
+  """Revoke permission from user (admin only)"""
+  revokePermission(userId: ID!, permissionId: ID!): Boolean! @auth(requires: ADMIN)
+
+  """Mark notification as read"""
+  markNotificationAsRead(notificationId: ID!): Boolean! @auth
+
+  """Mark all notifications as read"""
+  markAllNotificationsAsRead: Boolean! @auth
+
+  """Delete user account"""
+  deleteAccount(password: String!): Boolean! @auth
+
+  """Deactivate user account"""
+  deactivateAccount: Boolean! @auth
+
+  """Reactivate user account"""
+  reactivateAccount(email: String!, password: String!): AuthResult!
+}
+
+type Subscription {
+  """Subscribe to user updates"""
+  userUpdated(userId: ID): User! @auth
+
+  """Subscribe to user notifications"""
+  notificationReceived: Notification! @auth
+
+  """Subscribe to permission changes"""
+  permissionChanged(userId: ID): Permission! @auth
+}
+
+"""
+Custom directive for authentication
+"""
+directive @auth(requires: UserRole) on FIELD_DEFINITION

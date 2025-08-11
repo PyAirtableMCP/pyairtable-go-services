@@ -1,0 +1,5 @@
+{
+  "status": "ok",
+  "service": "airtable-gateway-mock",
+  "message": "Mock Airtable Gateway for integration testing"
+}

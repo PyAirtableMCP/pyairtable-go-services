@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: userservice
+
+namespace: userservice
+
+resources:
+- namespace.yaml
+- configmap.yaml
+- deployment.yaml
+- service.yaml
+- ingress.yaml
+- hpa.yaml
+
+images:
+- name: userservice
+  newTag: latest
+
+commonLabels:
+  app: userservice
+  environment: production
+
+patches:
+- target:
+    kind: Deployment
+    name: userservice
+  patch: |
+    - op: replace
+      path: /spec/replicas
+      value: 3

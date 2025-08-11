@@ -1,0 +1,474 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plugin-service
+  namespace: pyairtable
+  labels:
+    app: plugin-service
+    component: backend
+    version: v1.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: plugin-service
+  template:
+    metadata:
+      labels:
+        app: plugin-service
+        component: backend
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: plugin-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+      - name: plugin-service
+        image: pyairtable/plugin-service:v1.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        env:
+        - name: PLUGIN_SERVICE_SERVER_HOST
+          value: "0.0.0.0"
+        - name: PLUGIN_SERVICE_SERVER_PORT
+          value: "8080"
+        - name: PLUGIN_SERVICE_DATABASE_HOST
+          value: "postgres-service"
+        - name: PLUGIN_SERVICE_DATABASE_PORT
+          value: "5432"
+        - name: PLUGIN_SERVICE_DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: plugin-service-secrets
+              key: database-user
+        - name: PLUGIN_SERVICE_DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: plugin-service-secrets
+              key: database-password
+        - name: PLUGIN_SERVICE_DATABASE_DBNAME
+          value: "plugin_service"
+        - name: PLUGIN_SERVICE_REDIS_HOST
+          value: "redis-service"
+        - name: PLUGIN_SERVICE_REDIS_PORT
+          value: "6379"
+        - name: PLUGIN_SERVICE_REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: plugin-service-secrets
+              key: redis-password
+        - name: PLUGIN_SERVICE_SECURITY_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: plugin-service-secrets
+              key: jwt-secret
+        - name: PLUGIN_SERVICE_SECURITY_CODE_SIGNING_ENABLED
+          value: "true"
+        - name: PLUGIN_SERVICE_STORAGE_TYPE
+          value: "s3"
+        - name: PLUGIN_SERVICE_STORAGE_S3_BUCKET
+          value: "pyairtable-plugins"
+        - name: PLUGIN_SERVICE_STORAGE_S3_REGION
+          value: "us-west-2"
+        - name: PLUGIN_SERVICE_STORAGE_S3_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: plugin-service-secrets
+              key: s3-access-key-id
+        - name: PLUGIN_SERVICE_STORAGE_S3_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: plugin-service-secrets
+              key: s3-secret-access-key
+        - name: PLUGIN_SERVICE_MONITORING_ENABLED
+          value: "true"
+        - name: PLUGIN_SERVICE_MONITORING_METRICS_ENABLED
+          value: "true"
+        - name: PLUGIN_SERVICE_MONITORING_TRACING_ENABLED
+          value: "true"
+        - name: PLUGIN_SERVICE_MONITORING_TRACING_ENDPOINT
+          value: "http://jaeger-collector:14268/api/traces"
+        - name: PLUGIN_SERVICE_REGISTRY_OFFICIAL_REGISTRY
+          value: "https://plugins.pyairtable.com"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        volumeMounts:
+        - name: config
+          mountPath: /app/configs
+          readOnly: true
+        - name: plugin-data
+          mountPath: /app/data
+        - name: temp-storage
+          mountPath: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: config
+        configMap:
+          name: plugin-service-config
+      - name: plugin-data
+        persistentVolumeClaim:
+          claimName: plugin-service-data
+      - name: temp-storage
+        emptyDir:
+          sizeLimit: 1Gi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - plugin-service
+              topologyKey: kubernetes.io/hostname
+      nodeSelector:
+        node-type: application
+      tolerations:
+      - key: "application"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plugin-service
+  namespace: pyairtable
+  labels:
+    app: plugin-service
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: plugin-service
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: plugin-service
+  namespace: pyairtable
+  labels:
+    app: plugin-service
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: pyairtable
+  name: plugin-service
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: plugin-service
+  namespace: pyairtable
+subjects:
+- kind: ServiceAccount
+  name: plugin-service
+  namespace: pyairtable
+roleRef:
+  kind: Role
+  name: plugin-service
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: plugin-service-config
+  namespace: pyairtable
+  labels:
+    app: plugin-service
+data:
+  config.yaml: |
+    server:
+      host: "0.0.0.0"
+      port: 8080
+      read_timeout: 30s
+      write_timeout: 30s
+      idle_timeout: 120s
+      tls:
+        enabled: false
+
+    database:
+      host: "postgres-service"
+      port: 5432
+      sslmode: "require"
+      max_open_conns: 25
+      max_idle_conns: 5
+      conn_max_lifetime: 5m
+      migrations_path: "./migrations"
+
+    redis:
+      host: "redis-service"
+      port: 6379
+      db: 0
+      pool_size: 10
+      dial_timeout: 5s
+      read_timeout: 3s
+      write_timeout: 3s
+      idle_timeout: 5m
+
+    runtime:
+      engine: "wazero"
+      max_instances: 100
+      instance_timeout: 30s
+      cache_size: 50
+      precompile_plugins: true
+      default_limits:
+        max_memory_mb: 64
+        max_cpu_percent: 50
+        max_execution_ms: 5000
+        max_storage_mb: 10
+        max_network_reqs: 10
+      max_limits:
+        max_memory_mb: 256
+        max_cpu_percent: 100
+        max_execution_ms: 30000
+        max_storage_mb: 100
+        max_network_reqs: 100
+
+    security:
+      code_signing_enabled: true
+      sandbox_enabled: true
+      permission_check_enabled: true
+      max_plugin_size: 10485760 # 10MB
+      allowed_file_types: ["wasm", "wat"]
+      quarantine_enabled: true
+      quarantine_time: 24h
+
+    registry:
+      default_registry: "official"
+      official_registry: "https://plugins.pyairtable.com"
+      cache_enabled: true
+      cache_ttl: 1h
+      sync_interval: 24h
+
+    monitoring:
+      enabled: true
+      metrics_enabled: true
+      metrics_path: "/metrics"
+      health_check_path: "/health"
+      tracing_enabled: true
+      service_name: "plugin-service"
+      log_level: "info"
+      audit_log_enabled: true
+      metrics_interval: 15s
+
+    storage:
+      type: "s3"
+      max_file_size: 52428800 # 50MB
+      temp_dir: "/tmp/plugin-service"
+      encryption:
+        enabled: true
+        algorithm: "AES-256-GCM"
+
+    logging:
+      level: "info"
+      format: "json"
+      output: "stdout"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: plugin-service-secrets
+  namespace: pyairtable
+  labels:
+    app: plugin-service
+type: Opaque
+data:
+  # These should be base64 encoded values
+  # Use: echo -n "your-secret" | base64
+  database-user: cGx1Z2luX3NlcnZpY2U= # plugin_service
+  database-password: cGx1Z2luX3Bhc3N3b3Jk # plugin_password
+  redis-password: cmVkaXNfcGFzc3dvcmQ= # redis_password
+  jwt-secret: eW91ci1qd3Qtc2VjcmV0LWhlcmU= # your-jwt-secret-here
+  s3-access-key-id: eW91ci1hY2Nlc3Mta2V5LWlk # your-access-key-id
+  s3-secret-access-key: eW91ci1zZWNyZXQtYWNjZXNzLWtleQ== # your-secret-access-key
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plugin-service-data
+  namespace: pyairtable
+  labels:
+    app: plugin-service
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: plugin-service-hpa
+  namespace: pyairtable
+  labels:
+    app: plugin-service
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: plugin-service
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: plugin-service-pdb
+  namespace: pyairtable
+  labels:
+    app: plugin-service
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: plugin-service
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: plugin-service-network-policy
+  namespace: pyairtable
+  labels:
+    app: plugin-service
+spec:
+  podSelector:
+    matchLabels:
+      app: plugin-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: pyairtable
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443 # HTTPS for external APIs
+    - protocol: TCP
+      port: 53 # DNS
+    - protocol: UDP
+      port: 53 # DNS

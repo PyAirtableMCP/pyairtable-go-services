@@ -1,0 +1,74 @@
+overwrite: true
+schema: 
+  - "http://localhost:4000/graphql"
+documents:
+  - "src/**/*.{ts,tsx}"
+  - "examples/**/*.graphql"
+generates:
+  src/generated/types.ts:
+    plugins:
+      - "typescript"
+    config:
+      scalars:
+        DateTime: Date
+        JSON: any
+        Upload: File
+      enumsAsTypes: true
+      constEnums: true
+      maybeValue: T | null | undefined
+      inputMaybeValue: T | null | undefined
+      typesPrefix: ""
+      avoidOptionals:
+        field: true
+        inputValue: true
+        object: true
+        defaultValue: true
+  
+  src/generated/resolvers.ts:
+    plugins:
+      - "typescript"
+      - "typescript-resolvers"
+    config:
+      scalars:
+        DateTime: Date
+        JSON: any
+        Upload: File
+      contextType: "../types#Context"
+      useIndexSignature: true
+      enumsAsTypes: true
+      
+  src/generated/operations.ts:
+    plugins:
+      - "typescript"
+      - "typescript-operations"
+    config:
+      scalars:
+        DateTime: Date
+        JSON: any
+        Upload: File
+      enumsAsTypes: true
+      
+  src/generated/client.ts:
+    plugins:
+      - "typescript"
+      - "typescript-operations"
+      - "typescript-graphql-request"
+    config:
+      scalars:
+        DateTime: Date
+        JSON: any
+        Upload: File
+      rawRequest: false
+      
+  src/generated/schema.json:
+    plugins:
+      - "introspection"
+      
+  src/generated/schema.graphql:
+    plugins:
+      - "schema-ast"
+
+hooks:
+  afterAllFileWrite:
+    - prettier --write
+    - eslint --fix

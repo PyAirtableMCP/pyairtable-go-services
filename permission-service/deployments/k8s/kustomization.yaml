@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: permissionservice
+
+namespace: permissionservice
+
+resources:
+- namespace.yaml
+- configmap.yaml
+- deployment.yaml
+- service.yaml
+- ingress.yaml
+- hpa.yaml
+
+images:
+- name: permissionservice
+  newTag: latest
+
+commonLabels:
+  app: permissionservice
+  environment: production
+
+patches:
+- target:
+    kind: Deployment
+    name: permissionservice
+  patch: |
+    - op: replace
+      path: /spec/replicas
+      value: 3

@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: notificationservice
+  labels:
+    name: notificationservice
+    app: notificationservice
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: notificationservice-limit-range
+  namespace: notificationservice
+spec:
+  limits:
+  - default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    type: Container

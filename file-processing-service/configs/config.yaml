@@ -1,0 +1,177 @@
+# File Processing Service Configuration
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: "30s"
+  write_timeout: "30s"
+  idle_timeout: "120s"
+  max_header_bytes: 1048576  # 1MB
+  shutdown_timeout: "30s"
+  enable_profiling: false
+  max_upload_size: 104857600  # 100MB
+  enable_compression: true
+  trusted_proxies: []
+
+database:
+  driver: "postgres"
+  host: "localhost"
+  port: 5432
+  name: "file_processing"
+  user: "postgres"
+  password: "password"
+  ssl_mode: "disable"
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: "5m"
+  conn_max_idle_time: "5m"
+  migrations_path: "./migrations"
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 10
+  dial_timeout: "5s"
+  read_timeout: "3s"
+  write_timeout: "3s"
+  max_retries: 3
+  cache_ttl: "1h"
+  key_prefix: "file-processing:"
+
+storage:
+  provider: "local"  # s3, minio, local
+  upload_timeout: "10m"
+  download_timeout: "5m"
+  max_file_size: 104857600  # 100MB
+  allowed_types: ["csv", "pdf", "docx", "xlsx", "jpeg", "png", "webp"]
+  
+  # Local storage configuration
+  local:
+    base_path: "./uploads"
+    serve_files: true
+    url_prefix: "/files"
+    max_disk_usage: 10737418240  # 10GB
+  
+  # S3 configuration (when provider is "s3")
+  s3:
+    region: "us-east-1"
+    bucket: "file-processing"
+    access_key_id: ""
+    secret_access_key: ""
+    endpoint: ""
+    disable_ssl: false
+    force_path_style: false
+  
+  # MinIO configuration (when provider is "minio")
+  minio:
+    endpoint: "localhost:9000"
+    access_key_id: "minioadmin"
+    secret_access_key: "minioadmin"
+    use_ssl: false
+    bucket: "file-processing"
+  
+  # CDN configuration (optional)
+  cdn:
+    enabled: false
+    base_url: ""
+    cache_ttl: 3600
+    purge_secret: ""
+
+processing:
+  worker_count: 4
+  queue_size: 1000
+  max_concurrent_uploads: 10
+  processing_timeout: "5m"
+  memory_limit: 536870912  # 512MB
+  temp_dir: "/tmp/file-processing"
+  cleanup_interval: "1h"
+  temp_file_retention: "24h"
+  
+  # CSV processing configuration
+  csv:
+    max_rows: 100000
+    max_columns: 1000
+    max_cell_size: 32768
+    detect_delimiter: true
+    skip_empty_lines: true
+    trim_spaces: true
+    streaming_threshold: 10485760  # 10MB
+    buffer_size: 8192
+    sample_size: 1024
+  
+  # PDF processing configuration
+  pdf:
+    max_pages: 1000
+    extract_images: true
+    extract_text: true
+    extract_metadata: true
+    generate_thumbnails: true
+    thumbnail_quality: 80
+    thumbnail_width: 200
+    thumbnail_height: 200
+    ocr_enabled: false
+    ocr_language: "eng"
+  
+  # Excel processing configuration
+  excel:
+    max_sheets: 50
+    max_rows: 100000
+    max_columns: 1000
+    read_formulas: false
+    read_comments: false
+    streaming_threshold: 10485760  # 10MB
+    buffer_size: 8192
+  
+  # Image processing configuration
+  image:
+    max_width: 4096
+    max_height: 4096
+    thumbnail_width: 200
+    thumbnail_height: 200
+    jpeg_quality: 90
+    webp_quality: 80
+    enable_webp: true
+    extract_exif: true
+    auto_orient: true
+    strip_metadata: false
+
+security:
+  enable_virus_scanning: false
+  clamav_host: "localhost"
+  clamav_port: 3310
+  clamav_timeout: "30s"
+  enable_file_type_check: true
+  block_executables: true
+  max_filename_length: 255
+  allowed_extensions: ["csv", "pdf", "docx", "xlsx", "jpg", "jpeg", "png", "webp"]
+  blocked_extensions: ["exe", "bat", "cmd", "scr", "pif", "vbs", "js"]
+  scan_result_cache_ttl: "1h"
+
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  metrics_path: "/metrics"
+  health_path: "/health"
+  pprof_enabled: false
+  log_level: "info"
+  log_format: "json"
+  tracing_enabled: false
+  tracing_endpoint: ""
+  sample_rate: 0.1
+  request_timeout: "30s"
+
+websocket:
+  enabled: true
+  path: "/ws"
+  read_buffer_size: 1024
+  write_buffer_size: 1024
+  handshake_timeout: "10s"
+  read_deadline: "60s"
+  write_deadline: "10s"
+  ping_period: "54s"
+  max_message_size: 512
+  check_origin: false
+  enable_compression: true
+  max_connections: 1000

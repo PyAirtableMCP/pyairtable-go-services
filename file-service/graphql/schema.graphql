@@ -1,0 +1,993 @@
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.3"
+        import: ["@key", "@shareable", "@provides", "@requires", "@external", "@tag", "@inaccessible"])
+
+"""
+File entity representing an uploaded file in PyAirtable
+"""
+type File @key(fields: "id") {
+  id: ID!
+  filename: String!
+  originalName: String!
+  mimeType: String!
+  size: Int!
+  
+  # Storage information
+  storageProvider: StorageProvider!
+  storageKey: String!
+  storageUrl: String!
+  cdnUrl: String
+  
+  # Workspace and ownership
+  workspaceId: ID! @external
+  workspace: Workspace! @provides(fields: "id name")
+  uploadedBy: ID!
+  uploader: User! @provides(fields: "id firstName lastName email")
+  
+  # File metadata
+  metadata: FileMetadata!
+  tags: [String!]!
+  description: String
+  
+  # Access control
+  visibility: FileVisibility!
+  permissions: FilePermissions!
+  
+  # Processing status
+  status: FileStatus!
+  processingStatus: ProcessingStatus
+  
+  # Versions and variants
+  versions: [FileVersion!]! @requires(fields: "id")
+  thumbnails: [FileThumbnail!]! @requires(fields: "id")
+  
+  # Usage tracking
+  downloadCount: Int!
+  viewCount: Int!
+  shareCount: Int!
+  lastAccessedAt: DateTime
+  
+  # Relationships
+  folder: FileFolder
+  folderId: ID
+  attachments: [FileAttachment!]! @requires(fields: "id")
+  shares: [FileShare!]! @requires(fields: "id")
+  
+  # Metadata
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Computed fields
+  extension: String!
+  isImage: Boolean!
+  isVideo: Boolean!
+  isAudio: Boolean!
+  isDocument: Boolean!
+  isArchive: Boolean!
+  humanSize: String!
+  downloadUrl: String!
+  previewUrl: String
+}
+
+"""
+Storage providers
+"""
+enum StorageProvider {
+  LOCAL
+  AWS_S3
+  GOOGLE_CLOUD_STORAGE
+  AZURE_BLOB_STORAGE
+  CLOUDINARY
+  BACKBLAZE_B2
+}
+
+"""
+File visibility settings
+"""
+enum FileVisibility {
+  PRIVATE
+  WORKSPACE
+  PUBLIC
+  SHARED_LINK
+}
+
+"""
+File status
+"""
+enum FileStatus {
+  UPLOADING
+  READY
+  PROCESSING
+  ERROR
+  DELETED
+  ARCHIVED
+}
+
+"""
+Processing status for files that require processing
+"""
+enum ProcessingStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+"""
+File metadata containing detailed information
+"""
+type FileMetadata {
+  # Image metadata
+  width: Int
+  height: Int
+  dpi: Int
+  colorSpace: String
+  hasTransparency: Boolean
+  
+  # Video metadata
+  duration: Float
+  bitrate: Int
+  frameRate: Float
+  resolution: String
+  codec: String
+  
+  # Audio metadata
+  sampleRate: Int
+  channels: Int
+  
+  # Document metadata
+  pageCount: Int
+  wordCount: Int
+  author: String
+  title: String
+  subject: String
+  creator: String
+  producer: String
+  
+  # EXIF data for images
+  exif: ExifData
+  
+  # Custom metadata
+  customFields: [CustomMetadataField!]!
+  
+  # Extracted content
+  extractedText: String
+  ocrText: String
+  
+  # Security
+  virusScanResult: VirusScanResult
+  contentHash: String!
+  checksums: FileChecksums!
+}
+
+"""
+EXIF data for images
+"""
+type ExifData {
+  camera: String
+  lens: String
+  focalLength: String
+  aperture: String
+  shutterSpeed: String
+  iso: Int
+  flash: String
+  orientation: Int
+  dateTimeOriginal: DateTime
+  gpsLatitude: Float
+  gpsLongitude: Float
+  gpsAltitude: Float
+}
+
+"""
+Custom metadata field
+"""
+type CustomMetadataField {
+  key: String!
+  value: String!
+  type: MetadataFieldType!
+}
+
+"""
+Metadata field types
+"""
+enum MetadataFieldType {
+  TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  URL
+  EMAIL
+}
+
+"""
+Virus scan result
+"""
+type VirusScanResult {
+  scanned: Boolean!
+  clean: Boolean!
+  threats: [String!]!
+  scanDate: DateTime!
+  scanner: String!
+}
+
+"""
+File checksums for integrity verification
+"""
+type FileChecksums {
+  md5: String!
+  sha1: String!
+  sha256: String!
+}
+
+"""
+File permissions configuration
+"""
+type FilePermissions {
+  canView: Boolean!
+  canDownload: Boolean!
+  canEdit: Boolean!
+  canDelete: Boolean!
+  canShare: Boolean!
+  canComment: Boolean!
+  canSetPermissions: Boolean!
+  
+  # Role-based permissions
+  viewerRoles: [String!]!
+  editorRoles: [String!]!
+  adminRoles: [String!]!
+  
+  # User-specific permissions
+  specificUsers: [UserPermission!]!
+}
+
+"""
+User-specific permission
+"""
+type UserPermission {
+  userId: ID!
+  user: User! @provides(fields: "id firstName lastName email")
+  permissions: [FilePermissionType!]!
+  grantedBy: ID!
+  grantedAt: DateTime!
+}
+
+"""
+File permission types
+"""
+enum FilePermissionType {
+  VIEW
+  DOWNLOAD
+  EDIT
+  DELETE
+  SHARE
+  COMMENT
+  ADMIN
+}
+
+"""
+File version for version control
+"""
+type FileVersion @key(fields: "id") {
+  id: ID!
+  fileId: ID! @external
+  file: File! @provides(fields: "id filename")
+  
+  version: String!
+  filename: String!
+  size: Int!
+  storageKey: String!
+  storageUrl: String!
+  
+  # Version metadata
+  uploadedBy: ID!
+  uploader: User! @provides(fields: "id firstName lastName")
+  comment: String
+  changeType: VersionChangeType!
+  
+  # Metadata
+  createdAt: DateTime!
+  
+  # Computed fields
+  humanSize: String!
+  downloadUrl: String!
+}
+
+"""
+Version change types
+"""
+enum VersionChangeType {
+  INITIAL
+  UPDATE
+  MINOR_EDIT
+  MAJOR_REVISION
+  ROLLBACK
+}
+
+"""
+File thumbnail for previews
+"""
+type FileThumbnail @key(fields: "id") {
+  id: ID!
+  fileId: ID! @external
+  file: File! @provides(fields: "id filename")
+  
+  size: ThumbnailSize!
+  width: Int!
+  height: Int!
+  format: String!
+  storageKey: String!
+  url: String!
+  
+  # Metadata
+  createdAt: DateTime!
+  
+  # Computed fields
+  aspectRatio: Float!
+}
+
+"""
+Thumbnail sizes
+"""
+enum ThumbnailSize {
+  SMALL
+  MEDIUM
+  LARGE
+  XLARGE
+}
+
+"""
+File folder for organization
+"""
+type FileFolder @key(fields: "id") {
+  id: ID!
+  name: String!
+  description: String
+  
+  # Hierarchy
+  parentId: ID
+  parent: FileFolder
+  children: [FileFolder!]!
+  path: String!
+  level: Int!
+  
+  # Workspace association
+  workspaceId: ID! @external
+  workspace: Workspace! @provides(fields: "id name")
+  
+  # Contents
+  files: [File!]! @requires(fields: "id")
+  fileCount: Int!
+  totalSize: Int!
+  
+  # Permissions
+  permissions: FolderPermissions!
+  
+  # Metadata
+  createdBy: ID!
+  creator: User! @provides(fields: "id firstName lastName")
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Computed fields
+  humanSize: String!
+  isRoot: Boolean!
+  fullPath: String!
+}
+
+"""
+Folder permissions
+"""
+type FolderPermissions {
+  canView: Boolean!
+  canUpload: Boolean!
+  canCreateFolder: Boolean!
+  canEdit: Boolean!
+  canDelete: Boolean!
+  canSetPermissions: Boolean!
+  
+  # Inheritance
+  inheritFromParent: Boolean!
+  
+  # Role-based permissions
+  uploaderRoles: [String!]!
+  adminRoles: [String!]!
+}
+
+"""
+File attachment linking files to other entities
+"""
+type FileAttachment @key(fields: "id") {
+  id: ID!
+  fileId: ID! @external
+  file: File! @provides(fields: "id filename mimeType size")
+  
+  # Attachment target
+  attachedTo: AttachmentTarget!
+  attachedToId: ID!
+  attachedToType: AttachmentType!
+  
+  # Attachment metadata
+  attachedBy: ID!
+  attacher: User! @provides(fields: "id firstName lastName")
+  attachedAt: DateTime!
+  description: String
+  
+  # Display properties
+  displayName: String
+  order: Int!
+  
+  # Computed fields
+  targetName: String
+}
+
+"""
+Attachment target union
+"""
+union AttachmentTarget = AirtableRecord | WorkspaceComment | ProjectTask
+
+"""
+Attachment types
+"""
+enum AttachmentType {
+  AIRTABLE_RECORD
+  WORKSPACE_COMMENT
+  PROJECT_TASK
+  USER_PROFILE
+  WORKSPACE_SETTINGS
+  EMAIL_TEMPLATE
+  WORKFLOW_ACTION
+}
+
+"""
+File share for sharing files with external users
+"""
+type FileShare @key(fields: "id") {
+  id: ID!
+  fileId: ID! @external
+  file: File! @provides(fields: "id filename")
+  
+  # Share configuration
+  token: String!
+  shareType: ShareType!
+  permissions: SharePermissions!
+  
+  # Access control
+  password: String @inaccessible
+  hasPassword: Boolean!
+  expiresAt: DateTime
+  maxDownloads: Int
+  downloadCount: Int!
+  
+  # Recipient information
+  recipientEmail: String
+  recipientName: String
+  
+  # Share metadata
+  createdBy: ID!
+  sharer: User! @provides(fields: "id firstName lastName")
+  createdAt: DateTime!
+  lastAccessedAt: DateTime
+  
+  # Access tracking
+  accessLog: [ShareAccess!]!
+  
+  # Computed fields
+  shareUrl: String!
+  isExpired: Boolean!
+  remainingDownloads: Int
+}
+
+"""
+Share types
+"""
+enum ShareType {
+  PUBLIC_LINK
+  EMAIL_SHARE
+  WORKSPACE_SHARE
+  PASSWORD_PROTECTED
+  TIME_LIMITED
+}
+
+"""
+Share permissions
+"""
+type SharePermissions {
+  canView: Boolean!
+  canDownload: Boolean!
+  canComment: Boolean!
+  allowPreview: Boolean!
+  showMetadata: Boolean!
+}
+
+"""
+Share access log entry
+"""
+type ShareAccess {
+  id: ID!
+  accessedAt: DateTime!
+  ipAddress: String!
+  userAgent: String!
+  action: ShareAction!
+  success: Boolean!
+}
+
+"""
+Share actions
+"""
+enum ShareAction {
+  VIEW
+  DOWNLOAD
+  PREVIEW
+  COMMENT
+}
+
+"""
+File upload configuration
+"""
+type UploadConfig {
+  maxFileSize: Int!
+  allowedMimeTypes: [String!]!
+  allowedExtensions: [String!]!
+  requiresApproval: Boolean!
+  autoProcessing: Boolean!
+  virusScanning: Boolean!
+  generateThumbnails: Boolean!
+  extractMetadata: Boolean!
+  ocrEnabled: Boolean!
+}
+
+"""
+File processing job
+"""
+type ProcessingJob @key(fields: "id") {
+  id: ID!
+  fileId: ID! @external
+  file: File! @provides(fields: "id filename")
+  
+  type: ProcessingType!
+  status: ProcessingStatus!
+  progress: Float!
+  
+  # Job configuration
+  config: JSON!
+  
+  # Results
+  output: ProcessingOutput
+  error: String
+  
+  # Metadata
+  startedAt: DateTime!
+  completedAt: DateTime
+  duration: Int
+  
+  # Retry information
+  retryCount: Int!
+  maxRetries: Int!
+}
+
+"""
+Processing types
+"""
+enum ProcessingType {
+  THUMBNAIL_GENERATION
+  VIDEO_TRANSCODING
+  AUDIO_TRANSCODING
+  IMAGE_OPTIMIZATION
+  OCR_EXTRACTION
+  VIRUS_SCANNING
+  METADATA_EXTRACTION
+  CONTENT_ANALYSIS
+  AI_TAGGING
+}
+
+"""
+Processing output
+"""
+type ProcessingOutput {
+  thumbnails: [String!]!
+  extractedText: String
+  metadata: JSON
+  tags: [String!]!
+  analysis: JSON
+}
+
+"""
+File statistics
+"""
+type FileStatistics {
+  totalFiles: Int!
+  totalSize: Int!
+  filesByType: [FileTypeCount!]!
+  filesByStatus: [FileStatusCount!]!
+  storageByProvider: [StorageProviderUsage!]!
+  uploadsToday: Int!
+  uploadsThisWeek: Int!
+  uploadsThisMonth: Int!
+  downloadCount: Int!
+  averageFileSize: Float!
+  largestFiles: [File!]!
+  mostDownloaded: [File!]!
+}
+
+"""
+File count by type
+"""
+type FileTypeCount {
+  mimeType: String!
+  count: Int!
+  totalSize: Int!
+}
+
+"""
+File count by status
+"""
+type FileStatusCount {
+  status: FileStatus!
+  count: Int!
+}
+
+"""
+Storage usage by provider
+"""
+type StorageProviderUsage {
+  provider: StorageProvider!
+  fileCount: Int!
+  totalSize: Int!
+  cost: Float
+}
+
+# External entity references
+type Workspace @key(fields: "id") {
+  id: ID! @external
+  name: String @external
+}
+
+type User @key(fields: "id") {
+  id: ID! @external
+  firstName: String @external
+  lastName: String @external
+  email: String @external
+}
+
+type AirtableRecord @key(fields: "id") {
+  id: ID! @external
+}
+
+type WorkspaceComment @key(fields: "id") {
+  id: ID! @external
+}
+
+type ProjectTask @key(fields: "id") {
+  id: ID! @external
+}
+
+# Scalars
+scalar DateTime
+scalar JSON
+scalar Upload
+
+# Input Types
+input UploadFileInput {
+  workspaceId: ID!
+  folderId: ID
+  file: Upload!
+  filename: String
+  description: String
+  tags: [String!]
+  visibility: FileVisibility = WORKSPACE
+  generateThumbnails: Boolean = true
+  extractMetadata: Boolean = true
+  customMetadata: [CustomMetadataFieldInput!]
+}
+
+input CustomMetadataFieldInput {
+  key: String!
+  value: String!
+  type: MetadataFieldType!
+}
+
+input UpdateFileInput {
+  filename: String
+  description: String
+  tags: [String!]
+  visibility: FileVisibility
+  folderId: ID
+  customMetadata: [CustomMetadataFieldInput!]
+}
+
+input CreateFolderInput {
+  workspaceId: ID!
+  parentId: ID
+  name: String!
+  description: String
+}
+
+input UpdateFolderInput {
+  name: String
+  description: String
+  parentId: ID
+}
+
+input ShareFileInput {
+  fileId: ID!
+  shareType: ShareType!
+  recipientEmail: String
+  recipientName: String
+  password: String
+  expiresAt: DateTime
+  maxDownloads: Int
+  permissions: SharePermissionsInput!
+}
+
+input SharePermissionsInput {
+  canView: Boolean = true
+  canDownload: Boolean = true
+  canComment: Boolean = false
+  allowPreview: Boolean = true
+  showMetadata: Boolean = false
+}
+
+input FileSearchFilters {
+  workspaceId: ID
+  folderId: ID
+  mimeTypes: [String!]
+  extensions: [String!]
+  status: [FileStatus!]
+  visibility: [FileVisibility!]
+  tags: [String!]
+  uploadedBy: ID
+  sizeRange: SizeRange
+  dateRange: DateRange
+}
+
+input SizeRange {
+  min: Int
+  max: Int
+}
+
+input DateRange {
+  start: DateTime
+  end: DateTime
+}
+
+input ProcessFileInput {
+  fileId: ID!
+  type: ProcessingType!
+  config: JSON
+}
+
+input BulkFileOperation {
+  fileIds: [ID!]!
+  operation: BulkOperation!
+  target: BulkOperationTarget
+}
+
+enum BulkOperation {
+  DELETE
+  MOVE
+  COPY
+  UPDATE_TAGS
+  UPDATE_VISIBILITY
+  ARCHIVE
+}
+
+input BulkOperationTarget {
+  folderId: ID
+  tags: [String!]
+  visibility: FileVisibility
+}
+
+input PaginationInput {
+  limit: Int = 20
+  offset: Int = 0
+  cursor: String
+}
+
+input SortInput {
+  field: String!
+  direction: SortDirection = ASC
+}
+
+enum SortDirection {
+  ASC
+  DESC
+}
+
+# Response Types
+type PaginatedFiles {
+  files: [File!]!
+  totalCount: Int!
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  cursor: String
+}
+
+type PaginatedFolders {
+  folders: [FileFolder!]!
+  totalCount: Int!
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  cursor: String
+}
+
+type BulkOperationResult {
+  success: Boolean!
+  processed: Int!
+  succeeded: Int!
+  failed: Int!
+  errors: [BulkOperationError!]!
+}
+
+type BulkOperationError {
+  fileId: ID!
+  error: String!
+}
+
+type UploadResult {
+  file: File!
+  processingJobs: [ProcessingJob!]!
+}
+
+# Queries
+type Query {
+  """Get file by ID"""
+  file(id: ID!): File
+
+  """Get files by IDs (for DataLoader)"""
+  files(ids: [ID!]!): [File]!
+
+  """Search files"""
+  searchFiles(
+    query: String
+    filters: FileSearchFilters
+    pagination: PaginationInput
+    sort: SortInput
+  ): PaginatedFiles!
+
+  """Get workspace files"""
+  workspaceFiles(
+    workspaceId: ID!
+    folderId: ID
+    pagination: PaginationInput
+    sort: SortInput
+  ): PaginatedFiles!
+
+  """Get file folder by ID"""
+  fileFolder(id: ID!): FileFolder
+
+  """Get workspace folders"""
+  workspaceFolders(
+    workspaceId: ID!
+    parentId: ID
+    pagination: PaginationInput
+  ): PaginatedFolders!
+
+  """Get file versions"""
+  fileVersions(fileId: ID!): [FileVersion!]!
+
+  """Get file shares"""
+  fileShares(fileId: ID!): [FileShare!]!
+
+  """Get shared file by token"""
+  sharedFile(token: String!): File
+
+  """Get file attachments"""
+  fileAttachments(
+    attachedToType: AttachmentType!
+    attachedToId: ID!
+  ): [FileAttachment!]!
+
+  """Get processing jobs"""
+  processingJobs(
+    fileId: ID
+    status: ProcessingStatus
+    type: ProcessingType
+  ): [ProcessingJob!]!
+
+  """Get upload configuration"""
+  uploadConfig(workspaceId: ID!): UploadConfig!
+
+  """Get file statistics"""
+  fileStatistics(workspaceId: ID): FileStatistics!
+
+  """Generate signed upload URL"""
+  generateUploadUrl(
+    workspaceId: ID!
+    filename: String!
+    mimeType: String!
+    size: Int!
+  ): String!
+
+  """Get file download URL"""
+  getDownloadUrl(fileId: ID!, expiresIn: Int = 3600): String!
+
+  """Get file preview URL"""
+  getPreviewUrl(fileId: ID!, size: ThumbnailSize = MEDIUM): String
+}
+
+# Mutations
+type Mutation {
+  """Upload file"""
+  uploadFile(input: UploadFileInput!): UploadResult! @auth
+
+  """Update file metadata"""
+  updateFile(id: ID!, input: UpdateFileInput!): File! @auth
+
+  """Delete file"""
+  deleteFile(id: ID!): Boolean! @auth
+
+  """Restore deleted file"""
+  restoreFile(id: ID!): File! @auth
+
+  """Create folder"""
+  createFolder(input: CreateFolderInput!): FileFolder! @auth
+
+  """Update folder"""
+  updateFolder(id: ID!, input: UpdateFolderInput!): FileFolder! @auth
+
+  """Delete folder"""
+  deleteFolder(id: ID!, deleteContents: Boolean = false): Boolean! @auth
+
+  """Move file to folder"""
+  moveFile(fileId: ID!, folderId: ID): File! @auth
+
+  """Copy file"""
+  copyFile(fileId: ID!, folderId: ID, newName: String): File! @auth
+
+  """Share file"""
+  shareFile(input: ShareFileInput!): FileShare! @auth
+
+  """Update file share"""
+  updateFileShare(id: ID!, input: ShareFileInput!): FileShare! @auth
+
+  """Revoke file share"""
+  revokeFileShare(id: ID!): Boolean! @auth
+
+  """Attach file to entity"""
+  attachFile(
+    fileId: ID!
+    attachedToType: AttachmentType!
+    attachedToId: ID!
+    description: String
+  ): FileAttachment! @auth
+
+  """Detach file from entity"""
+  detachFile(attachmentId: ID!): Boolean! @auth
+
+  """Process file"""
+  processFile(input: ProcessFileInput!): ProcessingJob! @auth
+
+  """Generate thumbnails"""
+  generateThumbnails(fileId: ID!, sizes: [ThumbnailSize!]): [FileThumbnail!]! @auth
+
+  """Extract file metadata"""
+  extractMetadata(fileId: ID!): FileMetadata! @auth
+
+  """Perform OCR on file"""
+  performOCR(fileId: ID!, language: String = "eng"): String! @auth
+
+  """Bulk file operations"""
+  bulkFileOperation(input: BulkFileOperation!): BulkOperationResult! @auth
+
+  """Set file permissions"""
+  setFilePermissions(fileId: ID!, permissions: JSON!): File! @auth
+
+  """Create file version"""
+  createFileVersion(fileId: ID!, file: Upload!, comment: String): FileVersion! @auth
+}
+
+# Subscriptions
+type Subscription {
+  """Subscribe to file uploads in workspace"""
+  fileUploaded(workspaceId: ID!): File! @auth
+
+  """Subscribe to file processing updates"""
+  fileProcessingUpdated(fileId: ID!): ProcessingJob! @auth
+
+  """Subscribe to file shares"""
+  fileShared(workspaceId: ID!): FileShare! @auth
+}
+
+# Directives
+directive @auth(requires: UserRole) on FIELD_DEFINITION

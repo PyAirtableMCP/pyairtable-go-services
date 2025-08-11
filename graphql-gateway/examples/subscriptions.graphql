@@ -1,0 +1,313 @@
+# Example GraphQL subscriptions for PyAirtable Federation
+
+# Subscribe to user updates
+subscription UserUpdated($userId: ID) {
+  userUpdated(userId: $userId) {
+    id
+    firstName
+    lastName
+    email
+    avatar
+    role
+    status
+    lastActiveAt
+    updatedAt
+  }
+}
+
+# Subscribe to workspace updates
+subscription WorkspaceUpdated($workspaceId: ID) {
+  workspaceUpdated(workspaceId: $workspaceId) {
+    id
+    name
+    description
+    avatar
+    plan
+    status
+    memberCount
+    projectCount
+    settings {
+      visibility
+      joinPolicy
+    }
+    updatedAt
+  }
+}
+
+# Subscribe to member changes in workspace
+subscription MemberUpdated($workspaceId: ID!) {
+  memberUpdated(workspaceId: $workspaceId) {
+    id
+    role
+    status
+    user {
+      id
+      firstName
+      lastName
+      email
+      avatar
+    }
+    joinedAt
+    lastActiveAt
+  }
+}
+
+# Subscribe to project updates
+subscription ProjectUpdated($workspaceId: ID) {
+  projectUpdated(workspaceId: $workspaceId) {
+    id
+    name
+    description
+    status
+    priority
+    progress
+    owner {
+      id
+      firstName
+      lastName
+    }
+    members {
+      id
+      role
+      user {
+        firstName
+        lastName
+      }
+    }
+    deadline
+    updatedAt
+  }
+}
+
+# Subscribe to workspace invitations
+subscription InvitationUpdated($workspaceId: ID!) {
+  invitationUpdated(workspaceId: $workspaceId) {
+    id
+    email
+    role
+    status
+    inviter {
+      id
+      firstName
+      lastName
+    }
+    message
+    expiresAt
+    createdAt
+    acceptedAt
+  }
+}
+
+# Subscribe to file uploads in workspace
+subscription FileUploaded($workspaceId: ID!) {
+  fileUploaded(workspaceId: $workspaceId) {
+    id
+    filename
+    originalName
+    mimeType
+    size
+    humanSize
+    uploader {
+      id
+      firstName
+      lastName
+    }
+    folder {
+      id
+      name
+      path
+    }
+    visibility
+    status
+    tags
+    createdAt
+  }
+}
+
+# Subscribe to file processing updates
+subscription FileProcessingUpdated($fileId: ID!) {
+  fileProcessingUpdated(fileId: $fileId) {
+    id
+    type
+    status
+    progress
+    output {
+      thumbnails
+      extractedText
+      tags
+    }
+    error
+    startedAt
+    completedAt
+  }
+}
+
+# Subscribe to file shares
+subscription FileShared($workspaceId: ID!) {
+  fileShared(workspaceId: $workspaceId) {
+    id
+    file {
+      id
+      filename
+    }
+    shareType
+    shareUrl
+    recipientEmail
+    recipientName
+    permissions {
+      canView
+      canDownload
+    }
+    expiresAt
+    createdBy
+    createdAt
+  }
+}
+
+# Subscribe to Airtable record changes
+subscription AirtableRecordChanged($tableId: ID!) {
+  airtableRecordChanged(tableId: $tableId) {
+    id
+    airtableId
+    table {
+      id
+      name
+    }
+    fields
+    fieldValues {
+      fieldId
+      fieldName
+      fieldType
+      value
+      displayValue
+    }
+    createdTime
+    lastModifiedTime
+  }
+}
+
+# Subscribe to Airtable base sync events
+subscription BaseSyncUpdated($baseId: ID!) {
+  baseSyncUpdated(baseId: $baseId) {
+    success
+    recordsProcessed
+    recordsCreated
+    recordsUpdated
+    recordsDeleted
+    errors {
+      recordId
+      error
+      severity
+    }
+    duration
+    timestamp
+  }
+}
+
+# Subscribe to base schema changes
+subscription BaseSchemaChanged($baseId: ID!) {
+  baseSchemaChanged(baseId: $baseId) {
+    id
+    name
+    connectionStatus
+    tables {
+      id
+      name
+      recordCount
+      fields {
+        id
+        name
+        type
+      }
+      views {
+        id
+        name
+        type
+      }
+    }
+    lastSyncAt
+    updatedAt
+  }
+}
+
+# Subscribe to user notifications
+subscription NotificationReceived {
+  notificationReceived {
+    id
+    type
+    title
+    message
+    priority
+    channel
+    read
+    data
+    createdAt
+    expiresAt
+  }
+}
+
+# Subscribe to permission changes
+subscription PermissionChanged($userId: ID) {
+  permissionChanged(userId: $userId) {
+    id
+    name
+    description
+    category
+    scope
+  }
+}
+
+# Subscribe to AI processing completion
+subscription AiProcessingComplete {
+  aiProcessingComplete {
+    id
+    type
+    status
+    result
+    metadata
+    completedAt
+  }
+}
+
+# Combined subscription for real-time dashboard
+subscription DashboardUpdates($workspaceId: ID!) {
+  # Workspace updates
+  workspaceUpdated(workspaceId: $workspaceId) {
+    id
+    name
+    memberCount
+    projectCount
+    updatedAt
+  }
+  
+  # File uploads
+  fileUploaded(workspaceId: $workspaceId) {
+    id
+    filename
+    uploader {
+      firstName
+      lastName
+    }
+    createdAt
+  }
+  
+  # Member changes
+  memberUpdated(workspaceId: $workspaceId) {
+    id
+    role
+    status
+    user {
+      firstName
+      lastName
+    }
+  }
+  
+  # Project updates  
+  projectUpdated(workspaceId: $workspaceId) {
+    id
+    name
+    status
+    progress
+    updatedAt
+  }
+}

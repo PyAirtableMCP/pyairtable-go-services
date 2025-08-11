@@ -1,0 +1,228 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  environment: "development"
+  read_timeout: "30s"
+  write_timeout: "30s"
+  idle_timeout: "120s"
+  shutdown_timeout: "30s"
+  body_limit: 4194304 # 4MB
+  concurrency: 262144 # 256K concurrent connections
+  prefork: false
+  disable_keepalive: false
+
+services:
+  auth_service:
+    url: "http://localhost:8081"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  user_service:
+    url: "http://localhost:8082"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  workspace_service:
+    url: "http://localhost:8083"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  base_service:
+    url: "http://localhost:8084"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  table_service:
+    url: "http://localhost:8085"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  view_service:
+    url: "http://localhost:8086"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  record_service:
+    url: "http://localhost:8087"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  field_service:
+    url: "http://localhost:8088"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  formula_service:
+    url: "http://localhost:8089"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  llm_orchestrator:
+    url: "http://localhost:8091"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  file_processor:
+    url: "http://localhost:8092"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  airtable_gateway:
+    url: "http://localhost:8093"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  analytics_service:
+    url: "http://localhost:8094"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+  
+  workflow_engine:
+    url: "http://localhost:8095"
+    timeout: "30s"
+    retry_count: 3
+    retry_delay: "1s"
+    health_check_path: "/health"
+    weight: 1
+
+auth:
+  jwt_secret: "your-super-secret-jwt-key-change-in-production"
+  jwt_expiry: "24h"
+  refresh_token_expiry: "168h" # 7 days
+  api_key_header: "X-API-Key"
+  require_auth: true
+
+redis:
+  url: "redis://localhost:6379"
+  password: ""
+  db: 0
+  pool_size: 10
+  min_idle_conn: 1
+
+security:
+  cors:
+    allow_origins:
+      - "http://localhost:3000"
+      - "http://localhost:8000"
+    allow_methods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "PATCH"
+      - "DELETE"
+      - "OPTIONS"
+    allow_headers:
+      - "Content-Type"
+      - "Authorization"
+      - "X-API-Key"
+      - "X-Trace-ID"
+    allow_credentials: true
+    max_age: 3600
+  
+  rate_limit:
+    enabled: true
+    global_limit: 10000
+    per_ip_limit: 100
+    window: "1m"
+    skip_paths:
+      - "/health"
+      - "/metrics"
+  
+  mtls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+    ca_file: ""
+    skip_paths:
+      - "/health"
+      - "/metrics"
+  
+  trusted_proxies: []
+
+observability:
+  metrics:
+    enabled: true
+    path: "/metrics"
+    port: 9090
+  
+  tracing:
+    enabled: true
+    service_name: "api-gateway"
+    endpoint: "http://localhost:14268/api/traces"
+    sample_rate: 0.1
+  
+  logging:
+    level: "info"
+    format: "json"
+    output: "stdout"
+    request_log: true
+
+performance:
+  circuit_breaker:
+    enabled: true
+    max_requests: 3
+    interval: "10s"
+    timeout: "60s"
+  
+  load_balancing:
+    algorithm: "round_robin" # round_robin, weighted, least_connections, random, latency, health_score
+    health_check: true
+    check_interval: "30s"
+    sticky_session: false
+  
+  caching:
+    enabled: true
+    default_ttl: "5m"
+    max_memory: 104857600 # 100MB
+    cleanup_interval: "10m"
+
+features:
+  websocket_enabled: true
+  blue_green_deployment: false
+  api_versioning: true
+  request_tracing: true
+  graceful_shutdown: true
+  pprof: false
+  health_check_paths:
+    - "/health"
+    - "/ready"
+    - "/live"

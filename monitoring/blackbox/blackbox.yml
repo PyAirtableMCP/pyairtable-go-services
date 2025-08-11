@@ -1,0 +1,155 @@
+# Blackbox Exporter Configuration for PyAirtable
+# Defines probes for external monitoring of services
+
+modules:
+  # HTTP 2xx probe - checks for successful HTTP responses
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      headers:
+        Host: localhost
+        Accept-Language: en-US
+        User-Agent: "Blackbox Exporter"
+      no_follow_redirects: false
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: true
+      preferred_ip_protocol: "ip4"
+
+  # HTTP 2xx probe with custom headers for API authentication
+  http_2xx_api:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 401] # 401 is acceptable for auth endpoints
+      method: GET
+      headers:
+        Host: localhost
+        Accept: "application/json"
+        Content-Type: "application/json"
+        User-Agent: "PyAirtable-Monitor"
+      no_follow_redirects: false
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: true
+
+  # HTTP POST probe for testing API endpoints
+  http_post_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 201]
+      method: POST
+      headers:
+        Content-Type: "application/json"
+        Accept: "application/json"
+      body: '{"test": "healthcheck"}'
+      no_follow_redirects: false
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+
+  # TCP probe for checking if ports are open
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+
+  # ICMP probe for basic connectivity
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: "ip4"
+
+  # DNS probe for DNS resolution testing
+  dns_lookup:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: "localhost"
+      query_type: "A"
+      valid_rcodes:
+        - NOERROR
+      preferred_ip_protocol: "ip4"
+
+  # Advanced HTTP probe with specific failure conditions
+  http_health_detailed:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      headers:
+        Accept: "application/json"
+        User-Agent: "PyAirtable-HealthCheck"
+      no_follow_redirects: false
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      fail_if_body_not_matches_regexp:
+        - ".*healthy.*"
+        - ".*ok.*"
+        - ".*status.*"
+      tls_config:
+        insecure_skip_verify: true
+      preferred_ip_protocol: "ip4"
+
+  # Database connection probe (for databases that support HTTP endpoints)
+  database_http:
+    prober: http
+    timeout: 15s
+    http:
+      valid_http_versions: ["HTTP/1.1"]
+      valid_status_codes: [200, 503] # 503 might indicate database issues
+      method: GET
+      headers:
+        Accept: "application/json"
+      no_follow_redirects: true
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+
+  # Prometheus endpoint probe
+  prometheus_metrics:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      headers:
+        Accept: "text/plain"
+      no_follow_redirects: false
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      fail_if_body_not_matches_regexp:
+        - ".*# HELP.*"  # Prometheus metrics should contain HELP comments
+      tls_config:
+        insecure_skip_verify: true
+
+  # Custom probe for specific PyAirtable endpoints
+  pyairtable_api:
+    prober: http
+    timeout: 15s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 400, 401, 403] # Various acceptable responses
+      method: GET
+      headers:
+        Accept: "application/json"
+        Content-Type: "application/json"
+        User-Agent: "PyAirtable-Monitor/1.0"
+      no_follow_redirects: false
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: true
+      preferred_ip_protocol: "ip4"

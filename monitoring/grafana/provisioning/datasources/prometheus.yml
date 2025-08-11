@@ -1,0 +1,76 @@
+# Grafana Datasource Provisioning for PyAirtable Monitoring
+# Automatically configures Prometheus as the primary datasource
+
+apiVersion: 1
+
+datasources:
+  # Primary Prometheus datasource
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    orgId: 1
+    version: 1
+    
+    # Basic configuration
+    basicAuth: false
+    withCredentials: false
+    
+    # HTTP settings
+    httpMethod: POST
+    
+    # Custom HTTP headers
+    httpHeaderName1: "X-Grafana-Org-Id"
+    httpHeaderValue1: "1"
+    
+    # JSON data for additional configuration
+    jsonData:
+      # Query timeout
+      timeInterval: "15s"
+      queryTimeout: "60s"
+      
+      # HTTP settings
+      httpMode: "POST"
+      keepCookies: []
+      
+      # Custom query parameters
+      customQueryParameters: ""
+      
+      # Prometheus-specific settings
+      prometheusType: "Prometheus"
+      prometheusVersion: "2.48.0"
+      
+      # Disable metric lookup for performance
+      disableMetricsLookup: false
+      
+      # Enable exemplars
+      exemplarTraceIdDestinations:
+        - name: "trace_id"
+          url: "http://jaeger:16686/trace/${__value.raw}"
+      
+      # Custom headers for security
+      tlsSkipVerify: true
+      
+    # Security configuration
+    secureJsonData: {}
+    
+    # Cache settings
+    uid: "prometheus-uid"
+    
+  # Additional datasource for Alertmanager
+  - name: Alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    isDefault: false
+    editable: false
+    orgId: 1
+    version: 1
+    
+    jsonData:
+      implementation: "prometheus"
+      handleGrafanaManagedAlerts: true
+      
+    uid: "alertmanager-uid"

@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webbff-config
+  namespace: webbff
+  labels:
+    app: webbff
+data:
+  PORT: "8089"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_NAME: "web_bff_db"
+  DB_SSL_MODE: "require"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  LOG_LEVEL: "info"
+  CORS_ALLOWED_ORIGINS: "*"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webbff-secret
+  namespace: webbff
+  labels:
+    app: webbff
+type: Opaque
+data:
+  # Base64 encoded values - replace with actual encoded secrets
+  DB_USER: cG9zdGdyZXM=  # postgres
+  DB_PASSWORD: cG9zdGdyZXM=  # postgres
+  JWT_SECRET: eW91ci1zZWNyZXQta2V5  # your-secret-key
+  REDIS_PASSWORD: ""

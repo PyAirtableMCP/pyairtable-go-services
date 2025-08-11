@@ -1,0 +1,296 @@
+# PyAirtable Alerting Rules
+# Critical alerts for service health, performance, and infrastructure
+
+groups:
+  # ===== SERVICE HEALTH ALERTS =====
+  - name: service_health
+    interval: 30s
+    rules:
+      # Service Down - Critical
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.service }} is down"
+          description: "Service {{ $labels.service }} ({{ $labels.instance }}) has been down for more than 1 minute."
+          runbook_url: "https://docs.pyairtable.com/runbooks/service-down"
+
+      # High Error Rate - Critical
+      - alert: HighErrorRate
+        expr: (rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])) * 100 > 5
+        for: 2m
+        labels:
+          severity: critical
+          category: errors
+        annotations:
+          summary: "High error rate on {{ $labels.service }}"
+          description: "Service {{ $labels.service }} has error rate of {{ $value }}% over the last 5 minutes."
+          runbook_url: "https://docs.pyairtable.com/runbooks/high-error-rate"
+
+      # Service Health Check Failing
+      - alert: HealthCheckFailing
+        expr: probe_success == 0
+        for: 1m
+        labels:
+          severity: warning
+          category: health
+        annotations:
+          summary: "Health check failing for {{ $labels.service }}"
+          description: "Health check endpoint for {{ $labels.service }} has been failing for more than 1 minute."
+
+  # ===== PERFORMANCE ALERTS =====
+  - name: performance
+    interval: 30s
+    rules:
+      # High Response Time - Warning
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1.0
+        for: 3m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High response time on {{ $labels.service }}"
+          description: "95th percentile response time for {{ $labels.service }} is {{ $value }}s over the last 5 minutes."
+
+      # Very High Response Time - Critical
+      - alert: VeryHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 5.0
+        for: 1m
+        labels:
+          severity: critical
+          category: performance
+        annotations:
+          summary: "Very high response time on {{ $labels.service }}"
+          description: "95th percentile response time for {{ $labels.service }} is {{ $value }}s over the last 5 minutes."
+
+      # High Request Rate - Warning
+      - alert: HighRequestRate
+        expr: rate(http_requests_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High request rate on {{ $labels.service }}"
+          description: "Request rate for {{ $labels.service }} is {{ $value }} requests/second over the last 5 minutes."
+
+  # ===== DATABASE ALERTS =====
+  - name: database
+    interval: 30s
+    rules:
+      # PostgreSQL Down
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "PostgreSQL database has been down for more than 1 minute."
+
+      # High Database Connections
+      - alert: HighDatabaseConnections
+        expr: (pg_stat_database_numbackends / pg_settings_max_connections) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High database connection usage"
+          description: "Database connection usage is {{ $value }}% of maximum connections."
+
+      # Database Connection Pool Exhausted
+      - alert: DatabaseConnectionPoolExhausted
+        expr: database_connections >= 25
+        for: 2m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "Database connection pool exhausted for {{ $labels.service }}"
+          description: "Service {{ $labels.service }} has exhausted its database connection pool."
+
+      # Slow Database Queries
+      - alert: SlowDatabaseQueries
+        expr: pg_stat_activity_max_tx_duration > 30
+        for: 2m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Long-running database transactions detected, max duration: {{ $value }}s."
+
+  # ===== CACHE ALERTS =====
+  - name: cache
+    interval: 30s
+    rules:
+      # Redis Down
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: cache
+        annotations:
+          summary: "Redis cache is down"
+          description: "Redis cache has been down for more than 1 minute."
+
+      # Low Cache Hit Ratio
+      - alert: LowCacheHitRatio
+        expr: (redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total)) * 100 < 80
+        for: 10m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "Low cache hit ratio"
+          description: "Redis cache hit ratio is {{ $value }}% over the last 10 minutes."
+
+      # High Memory Usage - Redis
+      - alert: RedisHighMemoryUsage
+        expr: (redis_memory_used_bytes / redis_memory_max_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "High Redis memory usage"
+          description: "Redis memory usage is {{ $value }}% of maximum memory."
+
+      # Redis Connection Issues
+      - alert: RedisConnectionIssues
+        expr: redis_connections >= 100
+        for: 2m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "High number of Redis connections"
+          description: "Redis has {{ $value }} active connections."
+
+  # ===== INFRASTRUCTURE ALERTS =====
+  - name: infrastructure
+    interval: 30s
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: (100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+        for: 10m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% over the last 5 minutes."
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: ((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% of total memory."
+
+      # Low Disk Space
+      - alert: LowDiskSpace
+        expr: ((node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Low disk space"
+          description: "Disk usage is {{ $value }}% on {{ $labels.mountpoint }}."
+
+      # High Load Average
+      - alert: HighLoadAverage
+        expr: node_load1 > 4
+        for: 10m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High load average"
+          description: "Load average is {{ $value }} over the last minute."
+
+  # ===== CONTAINER ALERTS =====
+  - name: containers
+    interval: 30s
+    rules:
+      # Container High CPU
+      - alert: ContainerHighCPU
+        expr: (rate(container_cpu_usage_seconds_total[5m]) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          category: containers
+        annotations:
+          summary: "High CPU usage in container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} CPU usage is {{ $value }}%."
+
+      # Container High Memory
+      - alert: ContainerHighMemory
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          category: containers
+        annotations:
+          summary: "High memory usage in container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} memory usage is {{ $value }}% of limit."
+
+      # Container Restart
+      - alert: ContainerRestart
+        expr: increase(container_start_time_seconds[1h]) > 0
+        labels:
+          severity: warning
+          category: containers
+        annotations:
+          summary: "Container {{ $labels.name }} restarted"
+          description: "Container {{ $labels.name }} has restarted in the last hour."
+
+  # ===== BUSINESS LOGIC ALERTS =====
+  - name: business_metrics
+    interval: 60s
+    rules:
+      # Authentication Failures
+      - alert: HighAuthenticationFailures
+        expr: rate(auth_attempts_total{status="failed"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Authentication failure rate is {{ $value }} failures/second over the last 5 minutes."
+
+      # API Rate Limit Hits
+      - alert: HighRateLimitHits
+        expr: rate(rate_limit_hits_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High rate limit hits"
+          description: "Rate limit is being hit {{ $value }} times/second over the last 5 minutes."
+
+      # Failed File Uploads
+      - alert: HighFileUploadFailures
+        expr: (rate(file_uploads_total{status="failed"}[5m]) / rate(file_uploads_total[5m])) * 100 > 10
+        for: 3m
+        labels:
+          severity: warning
+          category: functionality
+        annotations:
+          summary: "High file upload failure rate"
+          description: "File upload failure rate is {{ $value }}% over the last 5 minutes."

@@ -1,0 +1,41 @@
+# Grafana Dashboard Provisioning for PyAirtable
+# Automatically loads custom dashboards from the dashboards directory
+
+apiVersion: 1
+
+providers:
+  # Main dashboard provider
+  - name: 'PyAirtable Dashboards'
+    orgId: 1
+    folder: 'PyAirtable'
+    folderUid: 'pyairtable'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      
+  # System dashboards
+  - name: 'Infrastructure'
+    orgId: 1
+    folder: 'Infrastructure'
+    folderUid: 'infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/infrastructure
+      
+  # Service-specific dashboards
+  - name: 'Services'
+    orgId: 1
+    folder: 'Services'
+    folderUid: 'services'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/services

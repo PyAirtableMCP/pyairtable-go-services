@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: notificationservice
+  namespace: notificationservice
+  labels:
+    app: notificationservice
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8087"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8087
+    protocol: TCP
+    name: http
+  selector:
+    app: notificationservice
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notificationservice-headless
+  namespace: notificationservice
+  labels:
+    app: notificationservice
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - port: 8087
+    targetPort: 8087
+    protocol: TCP
+    name: http
+  selector:
+    app: notificationservice

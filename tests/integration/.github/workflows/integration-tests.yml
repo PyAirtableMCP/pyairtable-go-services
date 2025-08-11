@@ -1,0 +1,288 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run integration tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - auth
+          - rbac
+          - cross-service
+          - data
+          - performance
+          - quick
+
+env:
+  TEST_TIMEOUT: 30m
+  TEST_PARALLEL: 2
+  GO_VERSION: '1.21'
+
+jobs:
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        test-suite: 
+          - ${{ github.event.inputs.test_suite || 'all' }}
+
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Cache Docker layers
+      uses: actions/cache@v3
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+
+    - name: Install dependencies
+      working-directory: go-services/tests/integration
+      run: |
+        go mod download
+        go mod verify
+
+    - name: Validate test configuration
+      working-directory: go-services/tests/integration
+      run: |
+        # Validate Docker Compose configuration
+        docker-compose -f docker-compose.test.yml config > /dev/null
+        echo "✓ Docker Compose configuration is valid"
+        
+        # Validate Go modules
+        go mod verify
+        echo "✓ Go module verification passed"
+
+    - name: Run integration tests
+      working-directory: go-services/tests/integration
+      env:
+        VERBOSE: true
+        CI_MODE: true
+        TEST_SUITE: ${{ matrix.test-suite }}
+      run: |
+        # Create results directory
+        mkdir -p test-results
+        
+        # Run tests with detailed logging
+        ./run_tests.sh --ci --verbose --timeout ${{ env.TEST_TIMEOUT }} ${{ matrix.test-suite }} | tee test-results/integration-tests.log
+
+    - name: Collect service logs
+      if: failure()
+      working-directory: go-services/tests/integration
+      run: |
+        mkdir -p test-results/logs
+        
+        # Collect logs from all services
+        docker-compose -f docker-compose.test.yml -p pyairtable-integration-test logs --no-color > test-results/logs/all-services.log 2>&1 || true
+        
+        # Collect individual service logs
+        services=("api-gateway-test" "platform-services-test" "permission-service-test" "automation-services-test" "postgres-test" "redis-test")
+        for service in "${services[@]}"; do
+          docker-compose -f docker-compose.test.yml -p pyairtable-integration-test logs --no-color "$service" > "test-results/logs/${service}.log" 2>&1 || true
+        done
+
+    - name: Collect test artifacts
+      if: always()
+      working-directory: go-services/tests/integration
+      run: |
+        # Collect test coverage if available
+        if [ -f coverage.out ]; then
+          go tool cover -html=coverage.out -o test-results/coverage.html
+        fi
+        
+        # Collect Docker Compose configuration
+        docker-compose -f docker-compose.test.yml config > test-results/docker-compose-resolved.yml 2>&1 || true
+        
+        # Collect system information
+        echo "=== System Information ===" > test-results/system-info.txt
+        echo "Date: $(date)" >> test-results/system-info.txt
+        echo "Go version: $(go version)" >> test-results/system-info.txt
+        echo "Docker version: $(docker --version)" >> test-results/system-info.txt
+        echo "Docker Compose version: $(docker-compose --version)" >> test-results/system-info.txt
+        echo "Available memory: $(free -h)" >> test-results/system-info.txt
+        echo "Available disk: $(df -h)" >> test-results/system-info.txt
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: integration-test-results-${{ matrix.test-suite }}-${{ github.run_number }}
+        path: go-services/tests/integration/test-results/
+        retention-days: 30
+
+    - name: Parse test results
+      if: always()
+      working-directory: go-services/tests/integration
+      run: |
+        # Parse test results for summary
+        if [ -f test-results/integration-tests.log ]; then
+          echo "=== Test Summary ===" 
+          
+          # Count passed/failed tests
+          passed=$(grep -c "PASS:" test-results/integration-tests.log || echo "0")
+          failed=$(grep -c "FAIL:" test-results/integration-tests.log || echo "0")
+          
+          echo "Tests passed: $passed"
+          echo "Tests failed: $failed"
+          
+          # Extract timing information
+          if grep -q "ok.*[0-9].*s" test-results/integration-tests.log; then
+            echo "=== Test Timing ==="
+            grep "ok.*[0-9].*s" test-results/integration-tests.log
+          fi
+          
+          # Show failed tests
+          if [ "$failed" -gt 0 ]; then
+            echo "=== Failed Tests ==="
+            grep "FAIL:" test-results/integration-tests.log || true
+          fi
+        fi
+
+    - name: Cleanup test environment
+      if: always()
+      working-directory: go-services/tests/integration
+      run: |
+        # Stop and remove test containers
+        docker-compose -f docker-compose.test.yml -p pyairtable-integration-test down -v --remove-orphans || true
+        
+        # Clean up Docker resources
+        docker system prune -f --volumes || true
+
+  smoke-tests:
+    name: Quick Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Run quick smoke tests
+      working-directory: go-services/tests/integration
+      env:
+        VERBOSE: true
+        TEST_TIMEOUT: 10m
+      run: |
+        go mod download
+        ./run_tests.sh --verbose --timeout ${{ env.TEST_TIMEOUT }} quick
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: 'go-services/tests/integration'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [integration-tests]
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+
+    steps:
+    - name: Send notification
+      env:
+        WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        if [ -n "$WEBHOOK_URL" ]; then
+          status="${{ needs.integration-tests.result }}"
+          if [ "$status" == "success" ]; then
+            color="good"
+            emoji=":white_check_mark:"
+          else
+            color="danger"
+            emoji=":x:"
+          fi
+          
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"attachments\": [{
+                \"color\": \"$color\",
+                \"title\": \"$emoji PyAirtable Integration Tests\",
+                \"text\": \"Status: $status\",
+                \"fields\": [
+                  {\"title\": \"Repository\", \"value\": \"${{ github.repository }}\", \"short\": true},
+                  {\"title\": \"Branch\", \"value\": \"${{ github.ref_name }}\", \"short\": true},
+                  {\"title\": \"Commit\", \"value\": \"${{ github.sha }}\", \"short\": true},
+                  {\"title\": \"Run\", \"value\": \"${{ github.run_number }}\", \"short\": true}
+                ],
+                \"actions\": [{
+                  \"type\": \"button\",
+                  \"text\": \"View Run\",
+                  \"url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+                }]
+              }]
+            }" \
+            "$WEBHOOK_URL"
+        fi
