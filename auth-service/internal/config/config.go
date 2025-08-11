@@ -29,22 +29,34 @@ type Config struct {
 }
 
 func Load() *Config {
+	// Critical: JWT_SECRET is required for security
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		panic("JWT_SECRET environment variable is required")
+	}
+	
+	// Critical: DATABASE_URL is required
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		panic("DATABASE_URL environment variable is required")
+	}
+	
 	return &Config{
 		Port:        getEnv("PORT", "8001"),
 		Environment: getEnv("ENVIRONMENT", "development"),
 		
-		// Database
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:password@localhost:5432/pyairtable_auth?sslmode=require"),
+		// Database - no fallback for security
+		DatabaseURL: databaseURL,
 		
 		// Redis
 		RedisURL:      getEnv("REDIS_URL", "redis://localhost:6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
 		
-		// JWT
-		JWTSecret: getEnv("JWT_SECRET", "your-secret-key-here"),
+		// JWT - no fallback for security
+		JWTSecret: jwtSecret,
 		
-		// CORS
-		CORSOrigins: getEnv("CORS_ORIGINS", "*"),
+		// CORS - secure default instead of wildcard
+		CORSOrigins: getEnv("CORS_ORIGINS", "http://localhost:3000"),
 		
 		// Timeouts
 		RequestTimeout:  getEnvAsDuration("REQUEST_TIMEOUT", 30*time.Second),
