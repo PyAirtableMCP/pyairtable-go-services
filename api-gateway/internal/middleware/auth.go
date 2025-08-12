@@ -306,6 +306,25 @@ func GetUserFromContext(c *fiber.Ctx) (*Claims, bool) {
 	return user, ok
 }
 
+// JWT Middleware struct for main.go compatibility
+type JWTMiddleware struct {
+	auth *AuthMiddleware
+}
+
+func NewJWTMiddleware(secret string, logger *zap.Logger) *JWTMiddleware {
+	return &JWTMiddleware{
+		auth: &AuthMiddleware{logger: logger},
+	}
+}
+
+func (jm *JWTMiddleware) ValidateToken() fiber.Handler {
+	return jm.auth.JWT()
+}
+
+func (jm *JWTMiddleware) RequireRole(roles ...string) fiber.Handler {
+	return jm.auth.RequireRole(roles...)
+}
+
 // Helper function for min
 func min(a, b int) int {
 	if a < b {

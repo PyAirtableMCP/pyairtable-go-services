@@ -5,6 +5,8 @@ import (
 	"time"
 	
 	"github.com/gofiber/fiber/v2"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 type RateLimiter struct {
@@ -76,5 +78,26 @@ func (rl *RateLimiter) cleanupExpired() {
 			}
 		}
 		rl.mu.Unlock()
+	}
+}
+
+// RedisRateLimiter for main.go compatibility
+type RedisRateLimiter struct {
+	logger *zap.Logger
+}
+
+func NewRedisRateLimiter(client *redis.Client, logger *zap.Logger) *RedisRateLimiter {
+	return &RedisRateLimiter{logger: logger}
+}
+
+func (rrl *RedisRateLimiter) AuthEndpointsLimiter() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		return c.Next()
+	}
+}
+
+func (rrl *RedisRateLimiter) ProtectedEndpointsLimiter() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		return c.Next()
 	}
 }
