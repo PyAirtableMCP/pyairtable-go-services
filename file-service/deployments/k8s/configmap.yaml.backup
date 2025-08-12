@@ -26,10 +26,8 @@ metadata:
     app: fileservice
 type: Opaque
 data:
-  # SECURITY WARNING: These values must be replaced with actual secrets in production
-  # Use GitHub secrets or external secret management system
-  # These are placeholders and MUST be overridden
-  DB_USER: "PLACEHOLDER_DB_USER_BASE64"  # postgres
-  DB_PASSWORD: "PLACEHOLDER_DB_PASSWORD_BASE64"  # postgres
-  JWT_SECRET: "PLACEHOLDER_JWT_SECRET_BASE64"  # your-secret-key
-  REDIS_PASSWORD: "PLACEHOLDER_REDIS_PASSWORD_BASE64"
+  # Base64 encoded values - replace with actual encoded secrets
+  DB_USER: cG9zdGdyZXM=  # postgres
+  DB_PASSWORD: cG9zdGdyZXM=  # postgres
+  JWT_SECRET: eW91ci1zZWNyZXQta2V5  # your-secret-key
+  REDIS_PASSWORD: ""
