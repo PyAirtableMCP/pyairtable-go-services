@@ -1,17 +1,25 @@
 package main
 
 import (
+    "context"
+    "database/sql"
     "log"
     "strings"
     "time"
 
     "github.com/gofiber/fiber/v2"
     "github.com/gofiber/fiber/v2/middleware/cors"
-    "github.com/gofiber/fiber/v2/middleware/logger"
+    fiberLogger "github.com/gofiber/fiber/v2/middleware/logger"
     "github.com/gofiber/fiber/v2/middleware/recover"
-    "github.com/golang-jwt/jwt/v5"
+    "github.com/redis/go-redis/v9"
+    "go.uber.org/zap"
+    _ "github.com/lib/pq"
     
     "github.com/pyairtable-compose/auth-service/internal/config"
+    "github.com/pyairtable-compose/auth-service/internal/handlers"
+    "github.com/pyairtable-compose/auth-service/internal/repository/postgres"
+    redisRepo "github.com/pyairtable-compose/auth-service/internal/repository/redis"
+    "github.com/pyairtable-compose/auth-service/internal/services"
 )
 
 // Global config instance
@@ -51,31 +59,57 @@ func parseCORSOrigins(originsStr string) string {
     return result
 }
 
-type LoginRequest struct {
-    Email    string `json:"email"`
-    Password string `json:"password"`
-}
-
-type LoginResponse struct {
-    Token string    `json:"token"`
-    User  UserInfo `json:"user"`
-}
-
-type UserInfo struct {
-    ID    string `json:"id"`
-    Email string `json:"email"`
-}
-
-type Claims struct {
-    Email  string `json:"email"`
-    UserID string `json:"user_id"`
-    jwt.RegisteredClaims
-}
 
 func main() {
     // Load configuration with validation
     cfg = config.Load()
     log.Printf("Configuration loaded successfully")
+    
+    // Initialize logger
+    logger, err := zap.NewProduction()
+    if err != nil {
+        log.Fatal("Failed to initialize logger:", err)
+    }
+    defer logger.Sync()
+    
+    // Initialize database connection
+    db, err := sql.Open("postgres", cfg.DatabaseURL)
+    if err != nil {
+        logger.Fatal("Failed to connect to database", zap.Error(err))
+    }
+    defer db.Close()
+    
+    // Test database connection
+    if err = db.Ping(); err != nil {
+        logger.Fatal("Failed to ping database", zap.Error(err))
+    }
+    logger.Info("Connected to database successfully")
+    
+    // Initialize Redis client
+    // Parse Redis URL to extract address
+    redisAddr := strings.TrimPrefix(cfg.RedisURL, "redis://")
+    redisClient := redis.NewClient(&redis.Options{
+        Addr:     redisAddr,
+        Password: cfg.RedisPassword,
+        DB:       0,
+    })
+    
+    // Test Redis connection
+    _, err = redisClient.Ping(context.Background()).Result()
+    if err != nil {
+        logger.Fatal("Failed to connect to Redis", zap.Error(err))
+    }
+    logger.Info("Connected to Redis successfully")
+    
+    // Initialize repositories
+    userRepo := postgres.NewUserRepository(db)
+    tokenRepo := redisRepo.NewTokenRepository(redisClient)
+    
+    // Initialize services
+    authService := services.NewAuthService(logger, userRepo, tokenRepo, cfg.JWTSecret)
+    
+    // Initialize handlers
+    authHandler := handlers.NewAuthHandler(logger, authService)
     
     // Create Fiber app
     app := fiber.New(fiber.Config{
@@ -88,7 +122,11 @@ func main() {
                 message = e.Message
             }
             
-            log.Printf("Error: %v - Path: %s - Method: %s", err, c.Path(), c.Method())
+            logger.Error("HTTP Error", 
+                zap.Error(err), 
+                zap.String("path", c.Path()), 
+                zap.String("method", c.Method()),
+                zap.Int("status", code))
             
             return c.Status(code).JSON(fiber.Map{
                 "error": message,
@@ -98,7 +136,7 @@ func main() {
 
     // Middleware
     app.Use(recover.New())
-    app.Use(logger.New())
+    app.Use(fiberLogger.New())
     app.Use(cors.New(cors.Config{
         AllowOrigins:     parseCORSOrigins(cfg.CORSOrigins),
         AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
@@ -116,82 +154,25 @@ func main() {
     })
 
     // Auth endpoints
-    app.Post("/auth/login", handleLogin)
+    app.Post("/auth/login", authHandler.Login)
+    app.Post("/auth/register", authHandler.Register)
+    app.Post("/auth/refresh", authHandler.RefreshToken)
+    app.Post("/auth/logout", authHandler.Logout)
+    app.Get("/auth/me", authHandler.GetMe)
+    app.Put("/auth/me", authHandler.UpdateMe)
+    app.Post("/auth/change-password", authHandler.ChangePassword)
+    app.Post("/auth/validate", authHandler.ValidateToken)
+
+    // Legacy endpoint for backward compatibility
+    app.Post("/auth/login-skeleton", authHandler.LoginSkeleton)
 
     // Start server
-    log.Printf("Starting auth service on port %s", cfg.Port)
-    log.Printf("Environment: %s", cfg.Environment)
-    log.Printf("Admin email configured: %s", cfg.AdminEmail)
+    logger.Info("Starting auth service", 
+        zap.String("port", cfg.Port),
+        zap.String("environment", cfg.Environment))
     
     if err := app.Listen(":" + cfg.Port); err != nil {
-        log.Fatal("Failed to start server:", err)
+        logger.Fatal("Failed to start server", zap.Error(err))
     }
 }
 
-func handleLogin(c *fiber.Ctx) error {
-    var req LoginRequest
-    
-    if err := c.BodyParser(&req); err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Invalid request body",
-        })
-    }
-
-    // Validate required fields
-    if req.Email == "" || req.Password == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Email and password are required",
-        })
-    }
-
-    // Check admin credentials from config
-    if req.Email != cfg.AdminEmail || req.Password != cfg.AdminPassword {
-        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-            "error": "Invalid credentials",
-        })
-    }
-
-    // Generate JWT token
-    token, err := generateJWT(req.Email)
-    if err != nil {
-        log.Printf("Failed to generate JWT: %v", err)
-        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-            "error": "Failed to generate token",
-        })
-    }
-
-    // Return successful response
-    return c.JSON(LoginResponse{
-        Token: token,
-        User: UserInfo{
-            ID:    "1",
-            Email: req.Email,
-        },
-    })
-}
-
-func generateJWT(email string) (string, error) {
-    // Create claims
-    claims := Claims{
-        Email:  email,
-        UserID: "1", // Hardcoded user ID
-        RegisteredClaims: jwt.RegisteredClaims{
-            ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // 24 hours
-            IssuedAt:  jwt.NewNumericDate(time.Now()),
-            NotBefore: jwt.NewNumericDate(time.Now()),
-            Issuer:    "pyairtable-auth-service",
-            Subject:   email,
-        },
-    }
-
-    // Create token
-    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-    // Sign token with secret from config
-    tokenString, err := token.SignedString([]byte(cfg.JWTSecret))
-    if err != nil {
-        return "", err
-    }
-
-    return tokenString, nil
-}
