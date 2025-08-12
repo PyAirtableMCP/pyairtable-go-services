@@ -4,6 +4,7 @@ import (
     "context"
     "database/sql"
     "log"
+    "net/http"
     "strings"
     "time"
 
@@ -20,6 +21,7 @@ import (
     "github.com/pyairtable-compose/auth-service/internal/repository/postgres"
     redisRepo "github.com/pyairtable-compose/auth-service/internal/repository/redis"
     "github.com/pyairtable-compose/auth-service/internal/services"
+    "github.com/pyairtable-compose/auth-service/internal/websocket"
 )
 
 // Global config instance
@@ -111,6 +113,13 @@ func main() {
     // Initialize handlers
     authHandler := handlers.NewAuthHandler(logger, authService)
     
+    // Initialize WebSocket hub
+    wsHub := websocket.NewHub(logger)
+    go wsHub.Run() // Start the hub in a goroutine
+    
+    // Initialize WebSocket handler
+    wsHandler := websocket.NewHandler(wsHub, logger)
+    
     // Create Fiber app
     app := fiber.New(fiber.Config{
         ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -166,7 +175,31 @@ func main() {
     // Legacy endpoint for backward compatibility
     app.Post("/auth/login-skeleton", authHandler.LoginSkeleton)
 
-    // Start server
+    // WebSocket endpoints
+    app.Get("/ws/stats", wsHandler.GetConnectionStats)
+    app.Post("/ws/broadcast", wsHandler.BroadcastMessage)
+    app.Get("/ws/table/:tableId/presence", wsHandler.GetTablePresence)
+    
+    // WebSocket upgrade endpoint (handled separately due to protocol requirements)
+    app.Get("/ws", wsHandler.HandleWebSocketUpgrade)
+
+    // Start WebSocket server on a separate port or handle it with net/http
+    http.HandleFunc("/ws", wsHandler.HandleWebSocketConnection)
+    
+    // Start HTTP server for WebSocket in a goroutine
+    go func() {
+        wsPort := "8081" // Use a different port for WebSocket
+        if cfg.Environment == "development" {
+            wsPort = "8081"
+        }
+        
+        logger.Info("Starting WebSocket server", zap.String("port", wsPort))
+        if err := http.ListenAndServe(":"+wsPort, nil); err != nil {
+            logger.Fatal("Failed to start WebSocket server", zap.Error(err))
+        }
+    }()
+
+    // Start main Fiber server
     logger.Info("Starting auth service", 
         zap.String("port", cfg.Port),
         zap.String("environment", cfg.Environment))
