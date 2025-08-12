@@ -57,7 +57,7 @@ echo "------------------------"
 
 # Generate random email
 RANDOM_EMAIL="test$(date +%s)@example.com"
-PASSWORD="TestPassword123!"
+PASSWORD="${TEST_PASSWORD:-TestPassword123!}"
 
 # Test registration through API Gateway
 echo -n "Registration: "
