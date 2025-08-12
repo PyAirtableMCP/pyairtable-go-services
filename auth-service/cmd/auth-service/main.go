@@ -1,89 +1,51 @@
 package main
 
 import (
-    "context"
-    "database/sql"
-    "fmt"
+    "log"
     "os"
-    "os/signal"
-    "syscall"
-    
-    "github.com/pyairtable-compose/auth-service/internal/config"
-    "github.com/pyairtable-compose/auth-service/internal/handlers"
-    "github.com/pyairtable-compose/auth-service/internal/middleware"
-    "github.com/pyairtable-compose/auth-service/internal/repository/postgres"
-    redisRepo "github.com/pyairtable-compose/auth-service/internal/repository/redis"
-    "github.com/pyairtable-compose/auth-service/internal/services"
+    "time"
+
     "github.com/gofiber/fiber/v2"
+    "github.com/gofiber/fiber/v2/middleware/cors"
     "github.com/gofiber/fiber/v2/middleware/logger"
     "github.com/gofiber/fiber/v2/middleware/recover"
-    "github.com/gofiber/fiber/v2/middleware/cors"
-    "github.com/joho/godotenv"
-    "github.com/redis/go-redis/v9"
-    "go.uber.org/zap"
-    _ "github.com/lib/pq"
+    "github.com/golang-jwt/jwt/v5"
 )
 
+const (
+    // Hardcoded credentials as requested
+    ADMIN_EMAIL    = "admin@test.com"
+    ADMIN_PASSWORD = "admin123"
+    // Hardcoded JWT secret (in production, use env var)
+    JWT_SECRET = "your-super-secret-jwt-key"
+    // Server port
+    PORT = "8080"
+)
+
+type LoginRequest struct {
+    Email    string `json:"email"`
+    Password string `json:"password"`
+}
+
+type LoginResponse struct {
+    Token string    `json:"token"`
+    User  UserInfo `json:"user"`
+}
+
+type UserInfo struct {
+    ID    string `json:"id"`
+    Email string `json:"email"`
+}
+
+type Claims struct {
+    Email  string `json:"email"`
+    UserID string `json:"user_id"`
+    jwt.RegisteredClaims
+}
+
 func main() {
-    // Load environment variables
-    _ = godotenv.Load()
-    
-    // Initialize logger
-    zapLogger, err := zap.NewProduction()
-    if err != nil {
-        panic(fmt.Sprintf("Failed to initialize logger: %v", err))
-    }
-    defer zapLogger.Sync()
-    
-    // Load configuration
-    cfg := config.Load()
-    
-    // Connect to PostgreSQL
-    db, err := sql.Open("postgres", cfg.DatabaseURL)
-    if err != nil {
-        zapLogger.Fatal("Failed to connect to database", zap.Error(err))
-    }
-    defer db.Close()
-    
-    // Test database connection
-    if err := db.Ping(); err != nil {
-        zapLogger.Fatal("Failed to ping database", zap.Error(err))
-    }
-    
-    // Connect to Redis
-    opt, err := redis.ParseURL(cfg.RedisURL)
-    if err != nil {
-        zapLogger.Fatal("Failed to parse Redis URL", zap.Error(err))
-    }
-    if cfg.RedisPassword != "" {
-        opt.Password = cfg.RedisPassword
-    }
-    
-    redisClient := redis.NewClient(opt)
-    defer redisClient.Close()
-    
-    // Test Redis connection
-    ctx := context.Background()
-    if err := redisClient.Ping(ctx).Err(); err != nil {
-        zapLogger.Fatal("Failed to connect to Redis", zap.Error(err))
-    }
-    
-    // Initialize repositories
-    userRepo := postgres.NewUserRepository(db)
-    tokenRepo := redisRepo.NewTokenRepository(redisClient)
-    
-    // Initialize services
-    authService := services.NewAuthService(zapLogger, userRepo, tokenRepo, cfg.JWTSecret)
-    
-    // Initialize handlers and middleware
-    authHandler := handlers.NewAuthHandler(zapLogger, authService)
-    authMiddleware := middleware.NewAuthMiddleware(zapLogger, authService)
-    
     // Create Fiber app
     app := fiber.New(fiber.Config{
-        ReadTimeout:  cfg.RequestTimeout,
-        WriteTimeout: cfg.RequestTimeout,
-        BodyLimit:    1 * 1024 * 1024, // 1MB body limit
         ErrorHandler: func(c *fiber.Ctx, err error) error {
             code := fiber.StatusInternalServerError
             message := "Internal Server Error"
@@ -93,78 +55,114 @@ func main() {
                 message = e.Message
             }
             
-            zapLogger.Error("Request error", 
-                zap.Error(err),
-                zap.String("path", c.Path()),
-                zap.String("method", c.Method()),
-                zap.String("ip", c.IP()))
+            log.Printf("Error: %v - Path: %s - Method: %s", err, c.Path(), c.Method())
             
             return c.Status(code).JSON(fiber.Map{
                 "error": message,
             })
         },
     })
-    
-    // Basic middleware
+
+    // Middleware
     app.Use(recover.New())
-    app.Use(logger.New(logger.Config{
-        Format: "[${time}] ${status} - ${latency} ${method} ${path} ${ip} ${ua}\n",
-    }))
+    app.Use(logger.New())
     app.Use(cors.New(cors.Config{
-        AllowOrigins: cfg.CORSOrigins,
-        AllowHeaders: "Origin, Content-Type, Accept, Authorization",
-        AllowMethods: "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-        AllowCredentials: false, // Security: disable credentials
+        AllowOrigins:     "*",
+        AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+        AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+        AllowCredentials: false,
     }))
-    
-    // Health check - simple alive check
+
+    // Health check endpoint
     app.Get("/health", func(c *fiber.Ctx) error {
         return c.JSON(fiber.Map{
             "status": "ok",
+            "service": "auth-service",
+            "timestamp": time.Now().Unix(),
         })
     })
-    
-    // Auth routes
-    auth := app.Group("/auth")
-    auth.Post("/login", authHandler.Login)
-    auth.Post("/register", authHandler.Register)
-    auth.Post("/refresh", authHandler.RefreshToken)
-    auth.Post("/logout", authHandler.Logout)
-    auth.Post("/validate", authHandler.ValidateToken)
-    
-    // API auth routes (skeleton endpoints)
-    api := app.Group("/api")
-    apiAuth := api.Group("/auth")
-    apiAuth.Post("/login", authHandler.LoginSkeleton)
-    
-    // Protected routes (require auth)
-    protected := auth.Group("", authMiddleware.RequireAuth)
-    protected.Get("/me", authHandler.GetMe)
-    protected.Put("/me", authHandler.UpdateMe)
-    protected.Post("/change-password", authHandler.ChangePassword)
-    
+
+    // Auth endpoints
+    app.Post("/auth/login", handleLogin)
+
     // Start server
-    go func() {
-        zapLogger.Info("Starting Auth Service", zap.String("port", cfg.Port))
-        if err := app.Listen(":" + cfg.Port); err != nil {
-            zapLogger.Fatal("Failed to start server", zap.Error(err))
-        }
-    }()
-    
-    // Wait for interrupt signal
-    quit := make(chan os.Signal, 1)
-    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-    <-quit
-    
-    zapLogger.Info("Shutting down server...")
-    
-    // Graceful shutdown
-    ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
-    defer cancel()
-    
-    if err := app.ShutdownWithContext(ctx); err != nil {
-        zapLogger.Error("Server forced to shutdown", zap.Error(err))
+    port := PORT
+    if envPort := os.Getenv("PORT"); envPort != "" {
+        port = envPort
     }
+
+    log.Printf("Starting simple auth service on port %s", port)
+    log.Printf("Hardcoded login: %s / %s", ADMIN_EMAIL, ADMIN_PASSWORD)
     
-    zapLogger.Info("Server exited")
+    if err := app.Listen(":" + port); err != nil {
+        log.Fatal("Failed to start server:", err)
+    }
+}
+
+func handleLogin(c *fiber.Ctx) error {
+    var req LoginRequest
+    
+    if err := c.BodyParser(&req); err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+            "error": "Invalid request body",
+        })
+    }
+
+    // Validate required fields
+    if req.Email == "" || req.Password == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+            "error": "Email and password are required",
+        })
+    }
+
+    // Check hardcoded credentials
+    if req.Email != ADMIN_EMAIL || req.Password != ADMIN_PASSWORD {
+        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+            "error": "Invalid credentials",
+        })
+    }
+
+    // Generate JWT token
+    token, err := generateJWT(req.Email)
+    if err != nil {
+        log.Printf("Failed to generate JWT: %v", err)
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+            "error": "Failed to generate token",
+        })
+    }
+
+    // Return successful response
+    return c.JSON(LoginResponse{
+        Token: token,
+        User: UserInfo{
+            ID:    "1",
+            Email: req.Email,
+        },
+    })
+}
+
+func generateJWT(email string) (string, error) {
+    // Create claims
+    claims := Claims{
+        Email:  email,
+        UserID: "1", // Hardcoded user ID
+        RegisteredClaims: jwt.RegisteredClaims{
+            ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // 24 hours
+            IssuedAt:  jwt.NewNumericDate(time.Now()),
+            NotBefore: jwt.NewNumericDate(time.Now()),
+            Issuer:    "pyairtable-auth-service",
+            Subject:   email,
+        },
+    }
+
+    // Create token
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+    // Sign token with secret
+    tokenString, err := token.SignedString([]byte(JWT_SECRET))
+    if err != nil {
+        return "", err
+    }
+
+    return tokenString, nil
 }
