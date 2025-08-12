@@ -20,6 +20,10 @@ type Config struct {
 	// JWT
 	JWTSecret string
 	
+	// Admin Credentials
+	AdminEmail    string
+	AdminPassword string
+	
 	// CORS
 	CORSOrigins string
 	
@@ -33,6 +37,17 @@ func Load() *Config {
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		panic("JWT_SECRET environment variable is required")
+	}
+	
+	// Critical: Admin credentials are required for authentication
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	if adminEmail == "" {
+		panic("ADMIN_EMAIL environment variable is required")
+	}
+	
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	if adminPassword == "" {
+		panic("ADMIN_PASSWORD environment variable is required")
 	}
 	
 	// Critical: DATABASE_URL is required
@@ -55,8 +70,12 @@ func Load() *Config {
 		// JWT - no fallback for security
 		JWTSecret: jwtSecret,
 		
-		// CORS - secure default instead of wildcard
-		CORSOrigins: getEnv("CORS_ORIGINS", "http://localhost:3000"),
+		// Admin Credentials - no fallback for security
+		AdminEmail:    adminEmail,
+		AdminPassword: adminPassword,
+		
+		// CORS - secure default with common frontend URLs
+		CORSOrigins: getEnv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3003"),
 		
 		// Timeouts
 		RequestTimeout:  getEnvAsDuration("REQUEST_TIMEOUT", 30*time.Second),

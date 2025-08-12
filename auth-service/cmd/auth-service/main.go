@@ -2,7 +2,7 @@ package main
 
 import (
     "log"
-    "os"
+    "strings"
     "time"
 
     "github.com/gofiber/fiber/v2"
@@ -10,17 +10,46 @@ import (
     "github.com/gofiber/fiber/v2/middleware/logger"
     "github.com/gofiber/fiber/v2/middleware/recover"
     "github.com/golang-jwt/jwt/v5"
+    
+    "github.com/pyairtable-compose/auth-service/internal/config"
 )
 
-const (
-    // Hardcoded credentials as requested
-    ADMIN_EMAIL    = "admin@test.com"
-    ADMIN_PASSWORD = "admin123"
-    // Hardcoded JWT secret (in production, use env var)
-    JWT_SECRET = "your-super-secret-jwt-key"
-    // Server port
-    PORT = "8080"
-)
+// Global config instance
+var cfg *config.Config
+
+// parseCORSOrigins parses comma-separated CORS origins and validates them
+func parseCORSOrigins(originsStr string) string {
+    if originsStr == "" {
+        return "http://localhost:3000"
+    }
+    
+    // Split by comma and clean up
+    origins := strings.Split(originsStr, ",")
+    validOrigins := make([]string, 0, len(origins))
+    
+    for _, origin := range origins {
+        origin = strings.TrimSpace(origin)
+        if origin != "" && origin != "*" {
+            // Validate origin format (basic validation)
+            if strings.HasPrefix(origin, "http://") || strings.HasPrefix(origin, "https://") {
+                validOrigins = append(validOrigins, origin)
+            } else {
+                log.Printf("Warning: Invalid origin format ignored: %s", origin)
+            }
+        } else if origin == "*" {
+            log.Printf("Security Warning: Wildcard origin '*' ignored for security")
+        }
+    }
+    
+    if len(validOrigins) == 0 {
+        log.Printf("No valid origins found, using secure default: http://localhost:3000")
+        return "http://localhost:3000"
+    }
+    
+    result := strings.Join(validOrigins, ",")
+    log.Printf("CORS origins configured: %s", result)
+    return result
+}
 
 type LoginRequest struct {
     Email    string `json:"email"`
@@ -44,6 +73,10 @@ type Claims struct {
 }
 
 func main() {
+    // Load configuration with validation
+    cfg = config.Load()
+    log.Printf("Configuration loaded successfully")
+    
     // Create Fiber app
     app := fiber.New(fiber.Config{
         ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -67,10 +100,10 @@ func main() {
     app.Use(recover.New())
     app.Use(logger.New())
     app.Use(cors.New(cors.Config{
-        AllowOrigins:     "*",
+        AllowOrigins:     parseCORSOrigins(cfg.CORSOrigins),
         AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
         AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-        AllowCredentials: false,
+        AllowCredentials: true,
     }))
 
     // Health check endpoint
@@ -86,15 +119,11 @@ func main() {
     app.Post("/auth/login", handleLogin)
 
     // Start server
-    port := PORT
-    if envPort := os.Getenv("PORT"); envPort != "" {
-        port = envPort
-    }
-
-    log.Printf("Starting simple auth service on port %s", port)
-    log.Printf("Hardcoded login: %s / %s", ADMIN_EMAIL, ADMIN_PASSWORD)
+    log.Printf("Starting auth service on port %s", cfg.Port)
+    log.Printf("Environment: %s", cfg.Environment)
+    log.Printf("Admin email configured: %s", cfg.AdminEmail)
     
-    if err := app.Listen(":" + port); err != nil {
+    if err := app.Listen(":" + cfg.Port); err != nil {
         log.Fatal("Failed to start server:", err)
     }
 }
@@ -115,8 +144,8 @@ func handleLogin(c *fiber.Ctx) error {
         })
     }
 
-    // Check hardcoded credentials
-    if req.Email != ADMIN_EMAIL || req.Password != ADMIN_PASSWORD {
+    // Check admin credentials from config
+    if req.Email != cfg.AdminEmail || req.Password != cfg.AdminPassword {
         return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
             "error": "Invalid credentials",
         })
@@ -158,8 +187,8 @@ func generateJWT(email string) (string, error) {
     // Create token
     token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-    // Sign token with secret
-    tokenString, err := token.SignedString([]byte(JWT_SECRET))
+    // Sign token with secret from config
+    tokenString, err := token.SignedString([]byte(cfg.JWTSecret))
     if err != nil {
         return "", err
     }
