@@ -38,13 +38,17 @@ DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
 DB_NAME="${DB_NAME:-auth_service}"
 DB_USER="${DB_USER:-postgres}"
-DB_PASSWORD="${DB_PASSWORD:-}"
 DB_SSL_MODE="${DB_SSL_MODE:-prefer}"
 
-# Connection string
-if [ -n "$DB_PASSWORD" ]; then
-    DB_URL="postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME?sslmode=$DB_SSL_MODE"
+# Secure connection string handling
+# Note: DB_PASSWORD should be set via environment variable or .pgpass file
+# Never log or expose passwords in command line arguments or logs
+if [ -n "${DB_PASSWORD:-}" ]; then
+    # Use PGPASSWORD environment variable for secure password handling
+    export PGPASSWORD="$DB_PASSWORD"
+    DB_URL="postgresql://$DB_USER@$DB_HOST:$DB_PORT/$DB_NAME?sslmode=$DB_SSL_MODE"
 else
+    # Rely on .pgpass file or peer authentication
     DB_URL="postgresql://$DB_USER@$DB_HOST:$DB_PORT/$DB_NAME?sslmode=$DB_SSL_MODE"
 fi
 
@@ -99,6 +103,7 @@ test_connection() {
     if ! psql "$DB_URL" -c "SELECT 1;" >/dev/null 2>&1; then
         log_error "Cannot connect to database. Check connection parameters."
         log_error "DB_HOST=$DB_HOST, DB_PORT=$DB_PORT, DB_NAME=$DB_NAME, DB_USER=$DB_USER"
+        log_error "Note: Ensure DB_PASSWORD is set via environment variable or .pgpass file"
         return 1
     fi
     
@@ -388,8 +393,13 @@ ENVIRONMENT VARIABLES:
     DB_PORT         Database port (default: 5432)
     DB_NAME         Database name (default: auth_service)
     DB_USER         Database user (default: postgres)
-    DB_PASSWORD     Database password
+    DB_PASSWORD     Database password (use environment variable or .pgpass file)
     DB_SSL_MODE     SSL mode (default: prefer)
+
+SECURITY NOTES:
+    - Never expose database passwords in command line arguments or logs
+    - Use environment variables or PostgreSQL .pgpass file for authentication
+    - Consider using PostgreSQL peer authentication in trusted environments
 
 EXAMPLES:
     $0 up                    # Apply all pending migrations
@@ -477,11 +487,12 @@ main() {
         set -x
     fi
     
-    # Show configuration
+    # Show configuration (without sensitive information)
     log_info "Starting migration script"
     log_info "Command: $command"
-    log_info "Database: $DB_NAME@$DB_HOST:$DB_PORT"
+    log_info "Database: $DB_NAME@$DB_HOST:$DB_PORT (user: $DB_USER)"
     log_info "Migrations directory: $MIGRATIONS_DIR"
+    log_info "SSL Mode: $DB_SSL_MODE"
     
     if [ "$dry_run" = true ]; then
         log_info "DRY RUN MODE - No changes will be made"

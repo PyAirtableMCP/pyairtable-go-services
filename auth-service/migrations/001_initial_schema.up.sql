@@ -33,7 +33,7 @@ CREATE TABLE users (
     email_verification_expires_at TIMESTAMP WITH TIME ZONE,
     
     -- Password management
-    password_reset_token VARCHAR(255),
+    password_reset_token VARCHAR(255) UNIQUE,
     password_reset_expires_at TIMESTAMP WITH TIME ZONE,
     password_changed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
@@ -149,43 +149,29 @@ CREATE TABLE audit_logs (
 -- INDEXES FOR PERFORMANCE
 -- =============================================
 
--- Users table indexes
+-- Users table indexes (optimized for performance)
 CREATE INDEX idx_users_email ON users(email) WHERE deleted_at IS NULL;
 CREATE INDEX idx_users_username ON users(username) WHERE deleted_at IS NULL;
 CREATE INDEX idx_users_status ON users(status) WHERE deleted_at IS NULL;
-CREATE INDEX idx_users_email_verified ON users(email_verified) WHERE deleted_at IS NULL;
 CREATE INDEX idx_users_password_reset_token ON users(password_reset_token) WHERE password_reset_token IS NOT NULL;
 CREATE INDEX idx_users_email_verification_token ON users(email_verification_token) WHERE email_verification_token IS NOT NULL;
-CREATE INDEX idx_users_created_at ON users(created_at);
-CREATE INDEX idx_users_last_login ON users(last_login_at);
-CREATE INDEX idx_users_metadata_gin ON users USING GIN(metadata);
 
--- User sessions table indexes
+-- User sessions table indexes (optimized for core queries)
 CREATE INDEX idx_sessions_user_id ON user_sessions(user_id);
 CREATE INDEX idx_sessions_token ON user_sessions(session_token);
 CREATE INDEX idx_sessions_refresh_token ON user_sessions(refresh_token) WHERE refresh_token IS NOT NULL;
-CREATE INDEX idx_sessions_status ON user_sessions(status);
 CREATE INDEX idx_sessions_expires_at ON user_sessions(expires_at);
-CREATE INDEX idx_sessions_last_activity ON user_sessions(last_activity_at);
-CREATE INDEX idx_sessions_ip_address ON user_sessions(ip_address);
-CREATE INDEX idx_sessions_device_id ON user_sessions(device_id) WHERE device_id IS NOT NULL;
 CREATE INDEX idx_sessions_user_status ON user_sessions(user_id, status) WHERE status = 'active';
 
--- Audit logs table indexes
+-- Audit logs table indexes (essential queries only)
 CREATE INDEX idx_audit_user_id ON audit_logs(user_id);
-CREATE INDEX idx_audit_session_id ON audit_logs(session_id);
-CREATE INDEX idx_audit_action ON audit_logs(action);
-CREATE INDEX idx_audit_resource ON audit_logs(resource_type, resource_id);
 CREATE INDEX idx_audit_created_at ON audit_logs(created_at);
-CREATE INDEX idx_audit_ip_address ON audit_logs(ip_address);
+CREATE INDEX idx_audit_resource ON audit_logs(resource_type, resource_id);
 CREATE INDEX idx_audit_request_id ON audit_logs(request_id) WHERE request_id IS NOT NULL;
-CREATE INDEX idx_audit_success ON audit_logs(success);
-CREATE INDEX idx_audit_metadata_gin ON audit_logs USING GIN(metadata);
 
--- Composite indexes for common queries
+-- Composite indexes for critical queries
 CREATE INDEX idx_users_email_status ON users(email, status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_sessions_user_active ON user_sessions(user_id, status, expires_at) WHERE status = 'active';
-CREATE INDEX idx_audit_user_action_time ON audit_logs(user_id, action, created_at);
 
 -- =============================================
 -- TRIGGERS FOR AUTOMATIC UPDATES
@@ -325,44 +311,11 @@ WHERE a.created_at > CURRENT_TIMESTAMP - INTERVAL '7 days'
 ORDER BY a.created_at DESC;
 
 -- =============================================
--- INITIAL DATA AND PERMISSIONS
+-- SECURITY NOTICE
 -- =============================================
-
--- Create a default admin user (password: admin123 - CHANGE IN PRODUCTION!)
-INSERT INTO users (
-    email, 
-    username, 
-    password_hash, 
-    first_name, 
-    last_name, 
-    status, 
-    email_verified
-) VALUES (
-    'admin@pyairtable.local',
-    'admin',
-    crypt('admin123', gen_salt('bf', 12)),
-    'System',
-    'Administrator',
-    'active',
-    TRUE
-);
-
--- Add audit log for initial admin creation
-INSERT INTO audit_logs (
-    action,
-    resource_type,
-    resource_id,
-    description,
-    ip_address,
-    metadata
-) VALUES (
-    'create',
-    'user',
-    (SELECT id::text FROM users WHERE email = 'admin@pyairtable.local'),
-    'Initial admin user created during database migration',
-    '127.0.0.1',
-    '{"migration": "001_initial_schema", "created_by": "system"}'
-);
+-- IMPORTANT: This migration does NOT create default admin users for security reasons.
+-- Admin users should be created manually after deployment using secure procedures.
+-- Refer to the operational documentation for admin user creation procedures.
 
 -- =============================================
 -- COMMENTS FOR DOCUMENTATION
