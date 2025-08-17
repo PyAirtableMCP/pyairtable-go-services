@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apigateway-config
+  namespace: apigateway
+  labels:
+    app: apigateway
+data:
+  PORT: "8080"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_NAME: "api_gateway_db"
+  DB_SSL_MODE: "require"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  LOG_LEVEL: "info"
+  CORS_ALLOWED_ORIGINS: "*"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: apigateway-secret
+  namespace: apigateway
+  labels:
+    app: apigateway
+type: Opaque
+data:
+  # SECURITY WARNING: These values must be replaced with actual secrets in production
+  # Use GitHub secrets or external secret management system
+  # These are placeholders and MUST be overridden
+  DB_USER: "PLACEHOLDER_DB_USER_BASE64"
+  DB_PASSWORD: "PLACEHOLDER_DB_PASSWORD_BASE64"
+  JWT_SECRET: "PLACEHOLDER_JWT_SECRET_BASE64"
+  REDIS_PASSWORD: "PLACEHOLDER_REDIS_PASSWORD_BASE64"

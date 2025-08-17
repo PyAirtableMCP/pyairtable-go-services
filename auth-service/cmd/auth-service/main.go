@@ -153,13 +153,38 @@ func main() {
         AllowCredentials: true,
     }))
 
-    // Health check endpoint
+    // Health check endpoint with dependency checks
     app.Get("/health", func(c *fiber.Ctx) error {
-        return c.JSON(fiber.Map{
+        health := fiber.Map{
             "status": "ok",
             "service": "auth-service",
             "timestamp": time.Now().Unix(),
-        })
+            "checks": fiber.Map{
+                "database": "ok",
+                "redis": "ok",
+            },
+        }
+        
+        // Check database connection
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+        
+        if err := db.PingContext(ctx); err != nil {
+            health["status"] = "unhealthy"
+            health["checks"].(fiber.Map)["database"] = "failed"
+            logger.Error("Database health check failed", zap.Error(err))
+            return c.Status(503).JSON(health)
+        }
+        
+        // Check Redis connection
+        if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
+            health["status"] = "degraded"
+            health["checks"].(fiber.Map)["redis"] = "failed"
+            logger.Error("Redis health check failed", zap.Error(err))
+            return c.Status(200).JSON(health) // Redis failure is non-critical for basic auth operations
+        }
+        
+        return c.JSON(health)
     })
 
     // Auth endpoints

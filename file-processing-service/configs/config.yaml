@@ -15,12 +15,12 @@ server:
 
 database:
   driver: "postgres"
-  host: "localhost"
-  port: 5432
-  name: "file_processing"
-  user: "postgres"
-  password: "password"
-  ssl_mode: "disable"
+  host: "${DB_HOST:-localhost}"
+  port: ${DB_PORT:-5432}
+  name: "${DB_NAME:-file_processing}"
+  user: "${DB_USER:-postgres}"
+  password: "${DB_PASSWORD}"
+  ssl_mode: "${DB_SSL_MODE:-disable}"
   max_open_conns: 25
   max_idle_conns: 5
   conn_max_lifetime: "5m"
@@ -66,11 +66,11 @@ storage:
   
   # MinIO configuration (when provider is "minio")
   minio:
-    endpoint: "localhost:9000"
-    access_key_id: "minioadmin"
-    secret_access_key: "minioadmin"
-    use_ssl: false
-    bucket: "file-processing"
+    endpoint: "${MINIO_ENDPOINT:-localhost:9000}"
+    access_key_id: "${MINIO_ACCESS_KEY}"
+    secret_access_key: "${MINIO_SECRET_KEY}"
+    use_ssl: ${MINIO_USE_SSL:-false}
+    bucket: "${MINIO_BUCKET:-file-processing}"
   
   # CDN configuration (optional)
   cdn:
